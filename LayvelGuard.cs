@@ -87,12 +87,15 @@ namespace LayvelGuard
         {
             try {
                 string exePath = Application.ExecutablePath;
-                if (!exePath.StartsWith(APP_DIR, StringComparison.OrdinalIgnoreCase) && !force) return false;
 
                 using (WebClient wc = new WebClient())
                 {
                     wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + CURRENT_VERSION;
-                    string json = wc.DownloadString(GITHUB_CONFIG_URL + "?t=" + Environment.TickCount);
+                    wc.Headers["Cache-Control"] = "no-cache";
+                    wc.Headers["Pragma"] = "no-cache";
+
+                    string nocache = Guid.NewGuid().ToString("N");
+                    string json = wc.DownloadString(GITHUB_CONFIG_URL + "?nocache=" + nocache);
                     if (json.Contains("\"script_version\""))
                     {
                         string remoteVer = ExtractJsonValue(json, "script_version");
@@ -101,14 +104,14 @@ namespace LayvelGuard
                             string targetExe = Path.Combine(APP_DIR, "LayvelGuard.exe");
                             string tempFile = Path.Combine(APP_DIR, "LayvelGuard_Update.exe");
 
-                            wc.DownloadFile(GITHUB_EXE_URL + "?v=" + Environment.TickCount, tempFile);
+                            wc.DownloadFile(GITHUB_EXE_URL + "?nocache=" + nocache, tempFile);
 
                             if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 10000)
                             {
                                 string batchUpdater = Path.Combine(APP_DIR, "update_layvelguard.bat");
                                 string script = string.Format(
                                     "@echo off\r\n" +
-                                    "timeout /t 2 /nobreak > nul\r\n" +
+                                    "timeout /t 1 /nobreak > nul\r\n" +
                                     "copy /y \"{0}\" \"{1}\"\r\n" +
                                     "copy /y \"{0}\" \"{2}\"\r\n" +
                                     "del \"{0}\"\r\n" +
@@ -1910,8 +1913,12 @@ namespace LayvelGuard
                     ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
                     using (WebClient wc = new WebClient())
                     {
-                        wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/1.0.0";
-                        string json = wc.DownloadString("https://raw.githubusercontent.com/layvel/layvelguard/main/config.json?t=" + Environment.TickCount);
+                        wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + Program.CURRENT_VERSION;
+                        wc.Headers["Cache-Control"] = "no-cache";
+                        wc.Headers["Pragma"] = "no-cache";
+
+                        string nocache = Guid.NewGuid().ToString("N");
+                        string json = wc.DownloadString("https://raw.githubusercontent.com/layvel/layvelguard/main/config.json?nocache=" + nocache);
                         string remoteVer = Program.ExtractJsonValue(json, "script_version");
 
                         if (!string.IsNullOrEmpty(remoteVer))
@@ -2143,7 +2150,7 @@ namespace LayvelGuard
         {
             SetProgress(10);
             Log("====================================================");
-            Log(" INICIANDO MANTENIMIENTO COMPLETO LAYVELGUARD v1.0.0 ");
+            Log(" INICIANDO MANTENIMIENTO COMPLETO LAYVELGUARD v1.1.0 ");
             Log("====================================================");
 
             SetProgress(20);

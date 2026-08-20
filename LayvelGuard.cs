@@ -158,6 +158,12 @@ namespace LayvelGuard
                 InstallStartupTask();
                 DoBlockGames();
                 EnforceLocalAccountsOnly();
+                string wallPath = @"C:\LayvelGuard\fondo_institucional.png";
+                if (!File.Exists(wallPath)) wallPath = @"C:\LayvelGuard\layvelguard_logo.png";
+                if (File.Exists(wallPath)) SetWallpapers(wallPath);
+                string logoPath = @"C:\LayvelGuard\logo_institucional.png";
+                if (File.Exists(logoPath)) SetUserProfilePicture(logoPath);
+
                 UninstallProhibitedSoftware(null);
                 List<string> detected = KillProhibitedProcesses();
             } catch {}
@@ -1036,6 +1042,193 @@ namespace LayvelGuard
         }
     }
 
+    public class WallpaperSelectorForm : Form
+    {
+        private RadioButton radInstitutional;
+        private RadioButton radZote;
+        private RadioButton radCustom;
+        private TextBox txtCustomPath;
+        private Button btnBrowseCustom;
+        private Button btnApply;
+        private Button btnCancel;
+        private Action<string> mainLogger;
+
+        public WallpaperSelectorForm(Action<string> logger)
+        {
+            this.mainLogger = logger;
+            InitializeComponent();
+        }
+
+        private void InitializeComponent()
+        {
+            this.Text = "LayvelGuard Pro - Selector de Fondo de Pantalla y Bloqueo";
+            this.Size = new Size(580, 360);
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = Color.FromArgb(15, 23, 42);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+
+            Panel header = new Panel();
+            header.Dock = DockStyle.Top;
+            header.Height = 65;
+            header.BackColor = Color.FromArgb(30, 41, 59);
+            header.Padding = new Padding(15, 10, 15, 10);
+
+            Label lblTitle = new Label();
+            lblTitle.Text = "🖼️ Seleccionar Fondo de Escritorio y Pantalla de Bloqueo";
+            lblTitle.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+            lblTitle.ForeColor = Color.White;
+            lblTitle.Location = new Point(15, 12);
+            lblTitle.AutoSize = true;
+            header.Controls.Add(lblTitle);
+
+            Label lblSub = new Label();
+            lblSub.Text = "Elija el fondo institucional, el tema LayvelGuard o busque cualquier imagen local.";
+            lblSub.Font = new Font("Segoe UI", 8.5f);
+            lblSub.ForeColor = Color.FromArgb(148, 163, 184);
+            lblSub.Location = new Point(15, 36);
+            lblSub.AutoSize = true;
+            header.Controls.Add(lblSub);
+
+            this.Controls.Add(header);
+
+            radInstitutional = new RadioButton();
+            radInstitutional.Text = "Fondo Institucional Colegio CBMW (fondo pc.png)";
+            radInstitutional.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            radInstitutional.ForeColor = Color.FromArgb(241, 245, 249);
+            radInstitutional.Location = new Point(30, 85);
+            radInstitutional.AutoSize = true;
+            radInstitutional.Checked = true;
+            this.Controls.Add(radInstitutional);
+
+            radZote = new RadioButton();
+            radZote.Text = "Fondo Personalizado LayvelGuard (Zote)";
+            radZote.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            radZote.ForeColor = Color.FromArgb(241, 245, 249);
+            radZote.Location = new Point(30, 125);
+            radZote.AutoSize = true;
+            this.Controls.Add(radZote);
+
+            radCustom = new RadioButton();
+            radCustom.Text = "Buscar Imagen Personalizada (.png / .jpg)...";
+            radCustom.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            radCustom.ForeColor = Color.FromArgb(241, 245, 249);
+            radCustom.Location = new Point(30, 165);
+            radCustom.AutoSize = true;
+            radCustom.CheckedChanged += (s, e) => {
+                txtCustomPath.Enabled = radCustom.Checked;
+                btnBrowseCustom.Enabled = radCustom.Checked;
+            };
+            this.Controls.Add(radCustom);
+
+            txtCustomPath = new TextBox();
+            txtCustomPath.Location = new Point(50, 200);
+            txtCustomPath.Size = new Size(360, 26);
+            txtCustomPath.Font = new Font("Segoe UI", 9f);
+            txtCustomPath.Enabled = false;
+            this.Controls.Add(txtCustomPath);
+
+            btnBrowseCustom = new Button();
+            btnBrowseCustom.Text = "📁 Examinar...";
+            btnBrowseCustom.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            btnBrowseCustom.BackColor = Color.FromArgb(59, 130, 246);
+            btnBrowseCustom.ForeColor = Color.White;
+            btnBrowseCustom.FlatStyle = FlatStyle.Flat;
+            btnBrowseCustom.FlatAppearance.BorderSize = 0;
+            btnBrowseCustom.Size = new Size(110, 26);
+            btnBrowseCustom.Location = new Point(420, 200);
+            btnBrowseCustom.Enabled = false;
+            btnBrowseCustom.Cursor = Cursors.Hand;
+            btnBrowseCustom.Click += (s, e) => BrowseImage();
+            this.Controls.Add(btnBrowseCustom);
+
+            btnApply = new Button();
+            btnApply.Text = "🖼️ Aplicar Fondo Seleccionado";
+            btnApply.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            btnApply.BackColor = Color.FromArgb(16, 185, 129);
+            btnApply.ForeColor = Color.White;
+            btnApply.FlatStyle = FlatStyle.Flat;
+            btnApply.FlatAppearance.BorderSize = 0;
+            btnApply.Size = new Size(240, 38);
+            btnApply.Location = new Point(30, 260);
+            btnApply.Cursor = Cursors.Hand;
+            btnApply.Click += (s, e) => ApplySelectedWallpaper();
+            this.Controls.Add(btnApply);
+
+            btnCancel = new Button();
+            btnCancel.Text = "Cancelar";
+            btnCancel.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            btnCancel.BackColor = Color.FromArgb(71, 85, 105);
+            btnCancel.ForeColor = Color.White;
+            btnCancel.FlatStyle = FlatStyle.Flat;
+            btnCancel.FlatAppearance.BorderSize = 0;
+            btnCancel.Size = new Size(110, 38);
+            btnCancel.Location = new Point(420, 260);
+            btnCancel.Cursor = Cursors.Hand;
+            btnCancel.Click += (s, e) => this.Close();
+            this.Controls.Add(btnCancel);
+        }
+
+        private void BrowseImage()
+        {
+            using (OpenFileDialog dlg = new OpenFileDialog())
+            {
+                dlg.Title = "Seleccionar Imagen para Fondo de Pantalla";
+                dlg.Filter = "Archivos de Imagen (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|Todos los archivos (*.*)|*.*";
+                if (dlg.ShowDialog() == DialogResult.OK)
+                {
+                    txtCustomPath.Text = dlg.FileName;
+                }
+            }
+        }
+
+        private void ApplySelectedWallpaper()
+        {
+            string targetImage = "";
+            if (radInstitutional.Checked)
+            {
+                targetImage = @"C:\LayvelGuard\fondo_institucional.png";
+            }
+            else if (radZote.Checked)
+            {
+                targetImage = @"C:\LayvelGuard\layvelguard_logo.png";
+            }
+            else if (radCustom.Checked)
+            {
+                targetImage = txtCustomPath.Text.Trim();
+                if (!File.Exists(targetImage))
+                {
+                    MessageBox.Show("Por favor seleccione un archivo de imagen válido.", "Aviso LayvelGuard", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            if (File.Exists(targetImage))
+            {
+                btnApply.Enabled = false;
+                ThreadPool.QueueUserWorkItem(state => {
+                    Program.SetWallpapers(targetImage);
+                    string logoInst = @"C:\LayvelGuard\logo_institucional.png";
+                    if (File.Exists(logoInst)) Program.SetUserProfilePicture(logoInst);
+
+                    try {
+                        this.Invoke(new Action(() => {
+                            btnApply.Enabled = true;
+                            if (mainLogger != null) mainLogger("Fondo de pantalla y bloqueo aplicados correctamente: " + Path.GetFileName(targetImage));
+                            MessageBox.Show("Fondo de escritorio y pantalla de bloqueo aplicados con éxito.", "LayvelGuard", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            this.Close();
+                        }));
+                    } catch {}
+                });
+            }
+            else
+            {
+                MessageBox.Show("No se encontró la imagen seleccionada: " + targetImage, "Error LayvelGuard", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+
     public class UninstallManagerForm : Form
     {
         private CheckedListBox chkListApps;
@@ -1474,16 +1667,8 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnAccounts);
 
-            Button btnWallpaper = CreateActionButton("[6] Aplicar Wallpaper LayvelGuard", Color.FromArgb(30, 41, 59), 276);
-            btnWallpaper.Click += (s, e) => RunAsync(() => {
-                Log("Aplicando fondo de escritorio y pantalla de bloqueo...");
-                string wallPath = @"C:\LayvelGuard\layvelguard_logo.png";
-                if (File.Exists(wallPath)) {
-                    Program.SetWallpapers(wallPath);
-                    Log("Fondo de escritorio y bloqueo aplicados.");
-                }
-                RefreshStatusBadges();
-            });
+            Button btnWallpaper = CreateActionButton("[6] Selector de Fondo + Bloqueo", Color.FromArgb(30, 41, 59), 276);
+            btnWallpaper.Click += (s, e) => OpenWallpaperSelector();
             leftPanel.Controls.Add(btnWallpaper);
 
             Button btnShortcuts = CreateActionButton("[7] Accesos Directos Institucionales", Color.FromArgb(30, 41, 59), 322);
@@ -1572,17 +1757,9 @@ namespace LayvelGuard
                 (s, e) => RunAsync(() => { Program.AllowMicrosoftAccounts(); RefreshStatusBadges(); Log("Cuentas Microsoft permitidas."); }));
             y += 60;
 
-            CreateStatusRow(panelStatus, "Fondo de Pantalla LayvelGuard:", y, out badgeWallpaper, out btnToggleWallpaper,
-                (s, e) => RunAsync(() => {
-                    string wp = @"C:\LayvelGuard\layvelguard_logo.png";
-                    if (File.Exists(wp)) Program.SetWallpapers(wp);
-                    RefreshStatusBadges();
-                    Log("Fondo aplicado.");
-                }),
-                (s, e) => RunAsync(() => {
-                    Log("Fondo liberado.");
-                    RefreshStatusBadges();
-                }));
+            CreateStatusRow(panelStatus, "Selector de Fondo de Pantalla y Bloqueo:", y, out badgeWallpaper, out btnToggleWallpaper,
+                (s, e) => OpenWallpaperSelector(),
+                (s, e) => Log("Selector de Fondo cerrado."));
             y += 60;
 
             CreateStatusRow(panelStatus, "Servicio Telemetrico de Encendido (Daemon):", y, out badgeService, out btnToggleService,
@@ -1609,6 +1786,13 @@ namespace LayvelGuard
             this.Controls.Add(navBar);
             this.Controls.Add(header);
             this.Controls.Add(progressBar);
+        }
+
+        private void OpenWallpaperSelector()
+        {
+            WallpaperSelectorForm form = new WallpaperSelectorForm((msg) => Log(msg));
+            form.ShowDialog(this);
+            RefreshStatusBadges();
         }
 
         private void PerformManualUpdateCheck()
@@ -1758,8 +1942,8 @@ namespace LayvelGuard
                     UpdateBadge(badgeAccounts, btnToggleAccounts, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
 
                     // 3. Fondo LayvelGuard
-                    bool isWallpaperSet = File.Exists(@"C:\LayvelGuard\layvelguard_logo.png");
-                    UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "APLICADO", "NO INSTALADO");
+                    bool isWallpaperSet = File.Exists(@"C:\LayvelGuard\fondo_institucional.png") || File.Exists(@"C:\LayvelGuard\layvelguard_logo.png");
+                    UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "DISPONIBLE", "NO INSTALADO");
 
                     // 4. Servicio Telemétrico
                     bool isServiceActive = false;
@@ -1874,11 +2058,17 @@ namespace LayvelGuard
             Log("      -> Bloqueo Web y filtro de navegadores aplicado.");
 
             SetProgress(75);
-            Log("[4/6] Aplicando fondo de escritorio y pantalla de bloqueo LayvelGuard...");
-            string wallPath = @"C:\LayvelGuard\layvelguard_logo.png";
+            Log("[4/6] Aplicando fondo de escritorio y pantalla de bloqueo...");
+            string wallPath = @"C:\LayvelGuard\fondo_institucional.png";
+            if (!File.Exists(wallPath)) wallPath = @"C:\LayvelGuard\layvelguard_logo.png";
             if (File.Exists(wallPath)) {
                 Program.SetWallpapers(wallPath);
-                Log("      -> Fondo de escritorio y bloqueo aplicados.");
+                Log("      -> Fondo de escritorio y bloqueo aplicados: " + Path.GetFileName(wallPath));
+            }
+            string logoInst = @"C:\LayvelGuard\logo_institucional.png";
+            if (File.Exists(logoInst)) {
+                Program.SetUserProfilePicture(logoInst);
+                Log("      -> Foto de perfil de usuario actualizada.");
             }
 
             SetProgress(90);

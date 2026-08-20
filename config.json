@@ -1,6 +1,6 @@
 {
   "app_name": "LayvelGuard Pro",
-  "script_version": "1.0.0",
+  "script_version": "1.1.0",
   "enabled": true,
   "mode": "enforce",
   "block_roblox_web": true,

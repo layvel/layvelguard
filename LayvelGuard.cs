@@ -25,6 +25,7 @@ namespace LayvelGuard
         public const string CURRENT_VERSION = "1.1.0";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
+        public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
         
         // GitHub Repository Central URLs
         private const string GITHUB_CONFIG_URL = "https://raw.githubusercontent.com/layvel/layvelguard/main/config.json";
@@ -41,6 +42,8 @@ namespace LayvelGuard
             ServicePointManager.ServerCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
             if (!Directory.Exists(APP_DIR)) Directory.CreateDirectory(APP_DIR);
+            
+            EnsureDefaultInstitutionsExist();
 
             CleanInvalidAutoLogon();
 
@@ -61,6 +64,60 @@ namespace LayvelGuard
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
+        }
+
+        public static void EnsureDefaultInstitutionsExist()
+        {
+            try {
+                if (!Directory.Exists(INST_DIR)) Directory.CreateDirectory(INST_DIR);
+
+                string cbmwDir = Path.Combine(INST_DIR, "CBMW");
+                string layvelDir = Path.Combine(INST_DIR, "LayvelGuard");
+
+                if (!Directory.Exists(cbmwDir)) Directory.CreateDirectory(cbmwDir);
+                if (!Directory.Exists(layvelDir)) Directory.CreateDirectory(layvelDir);
+
+                // 1. Restaurar/Copiar Fondo CBMW
+                string cbmwFondo = Path.Combine(cbmwDir, "fondo.png");
+                if (!File.Exists(cbmwFondo))
+                {
+                    string[] sources = new string[] {
+                        @"C:\Users\Profesor2\Downloads\lab\fondo pc.png",
+                        @"C:\LayvelGuard\fondo_institucional.png",
+                        @"C:\LayvelGuard\layvelguard_logo.png"
+                    };
+                    foreach (string s in sources)
+                    {
+                        if (File.Exists(s)) { try { File.Copy(s, cbmwFondo, true); break; } catch {} }
+                    }
+                }
+
+                // 2. Restaurar/Copiar Logo CBMW
+                string cbmwLogo = Path.Combine(cbmwDir, "logo.png");
+                if (!File.Exists(cbmwLogo))
+                {
+                    string[] sources = new string[] {
+                        @"C:\Users\Profesor2\Downloads\lab\logo.png",
+                        @"C:\Users\Profesor2\Downloads\lab\cbmw_logo.jpg",
+                        @"C:\LayvelGuard\logo_institucional.png",
+                        @"C:\LayvelGuard\layvelguard_logo.png"
+                    };
+                    foreach (string s in sources)
+                    {
+                        if (File.Exists(s)) { try { File.Copy(s, cbmwLogo, true); break; } catch {} }
+                    }
+                }
+
+                // 3. Restablecer LayvelGuard por defecto
+                string layFondo = Path.Combine(layvelDir, "fondo.png");
+                string layLogo = Path.Combine(layvelDir, "logo.png");
+                string zoteSource = @"C:\LayvelGuard\layvelguard_logo.png";
+                if (File.Exists(zoteSource))
+                {
+                    if (!File.Exists(layFondo)) try { File.Copy(zoteSource, layFondo, true); } catch {}
+                    if (!File.Exists(layLogo)) try { File.Copy(zoteSource, layLogo, true); } catch {}
+                }
+            } catch {}
         }
 
         public static void CleanInvalidAutoLogon()
@@ -1195,7 +1252,7 @@ namespace LayvelGuard
         private void LoadInstitutions()
         {
             try {
-                if (!Directory.Exists(instRootDir)) Directory.CreateDirectory(instRootDir);
+                Program.EnsureDefaultInstitutionsExist();
 
                 cmbInstitutions.Items.Clear();
                 string[] dirs = Directory.GetDirectories(instRootDir);

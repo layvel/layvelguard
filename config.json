@@ -1,0 +1,20 @@
+{
+  "app_name": "LayvelGuard Pro",
+  "script_version": "1.0.0",
+  "enabled": true,
+  "mode": "enforce",
+  "block_roblox_web": true,
+  "block_steam": true,
+  "block_minecraft": true,
+  "clean_downloads": true,
+  "shortcuts": [
+    {
+      "name": "Plataforma DIA",
+      "url": "https://dia.agenciaeducacion.cl/login"
+    },
+    {
+      "name": "UMaximo",
+      "url": "https://www.umaximo.com/"
+    }
+  ]
+}

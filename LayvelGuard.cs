@@ -926,6 +926,83 @@ namespace LayvelGuard
             } catch {}
         }
 
+        public static void SendTelemetry(string status, List<string> detected, List<string> inventory, Action<string> onCommandReceived)
+        {
+            try {
+                string localIp = "127.0.0.1";
+                try {
+                    IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+                    foreach (IPAddress ip in host.AddressList)
+                    {
+                        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !ip.ToString().StartsWith("127."))
+                        {
+                            localIp = ip.ToString();
+                            break;
+                        }
+                    }
+                } catch {}
+
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{");
+                sb.AppendFormat("\"hostname\":\"{0}\",", Environment.MachineName);
+                sb.AppendFormat("\"username\":\"{0}\",", Environment.UserName);
+                sb.AppendFormat("\"ip\":\"{0}\",", localIp);
+                sb.AppendFormat("\"status\":\"{0}\",", status);
+                sb.AppendFormat("\"script_version\":\"{0}\",", CURRENT_VERSION);
+
+                sb.Append("\"detected_apps\":[");
+                for (int i = 0; i < detected.Count; i++)
+                {
+                    sb.AppendFormat("\"{0}\"{1}", detected[i], (i < detected.Count - 1) ? "," : "");
+                }
+                sb.Append("],");
+
+                sb.AppendFormat("\"inventory_count\":{0}", inventory.Count);
+                sb.Append("}");
+
+                byte[] data = Encoding.UTF8.GetBytes(sb.ToString());
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("https://sistemas.cbmw.cl/api/lab/reporte.php");
+                req.Method = "POST";
+                req.ContentType = "application/json";
+                req.ContentLength = data.Length;
+                req.Timeout = 5000;
+
+                using (Stream stream = req.GetRequestStream())
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                {
+                    using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
+                    {
+                        string respText = sr.ReadToEnd();
+                        if (respText.Contains("\"command\":\"SHUTDOWN\""))
+                        {
+                            if (onCommandReceived != null)
+                            {
+                                try { onCommandReceived("SHUTDOWN"); } catch {}
+                            }
+
+                            Thread.Sleep(2000);
+
+                            try {
+                                ProcessStartInfo psi = new ProcessStartInfo("shutdown.exe", "/s /f /t 1 /c \"Apagado remoto solicitado desde Dashboard Web\"");
+                                psi.CreateNoWindow = true;
+                                psi.UseShellExecute = false;
+                                Process.Start(psi);
+
+                                ProcessStartInfo psi2 = new ProcessStartInfo("powershell.exe", "-Command \"Stop-Computer -Force\"");
+                                psi2.CreateNoWindow = true;
+                                psi2.UseShellExecute = false;
+                                Process.Start(psi2);
+                            } catch {}
+                        }
+                    }
+                }
+            } catch {}
+        }
+
         public static string ExtractJsonValue(string json, string key)
         {
             if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key)) return "";
@@ -1156,11 +1233,42 @@ namespace LayvelGuard
         private Label badgeBlockWeb, badgeAccounts, badgeWallpaper, badgeService, badgeShortcuts, badgeUninstall;
         private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleWallpaper, btnToggleService, btnToggleShortcuts, btnToggleUninstall;
 
+        private System.Windows.Forms.Timer telemetryTimer;
+
         public MainForm()
         {
             InitializeComponent();
             CheckConnectionAsync();
             RefreshStatusBadges();
+            StartTelemetryTimer();
+        }
+
+        private void StartTelemetryTimer()
+        {
+            telemetryTimer = new System.Windows.Forms.Timer();
+            telemetryTimer.Interval = 10000; // Cada 10 segundos transmite estado a la API
+            telemetryTimer.Tick += (s, e) => CheckRemoteCommands();
+            telemetryTimer.Start();
+        }
+
+        private void CheckRemoteCommands()
+        {
+            ThreadPool.QueueUserWorkItem(state => {
+                try {
+                    List<string> detected = Program.KillProhibitedProcesses();
+                    List<string> inv = Program.GetSoftwareInventory();
+                    Program.SendTelemetry("ONLINE", detected, inv, (cmd) => {
+                        if (cmd == "SHUTDOWN")
+                        {
+                            Log("====================================================");
+                            Log("[!] ALERTA CRITICA: RECIBIDA ORDEN DE APAGADO REMOTO");
+                            Log("    Solicitado desde Dashboard Web API");
+                            Log("    Ejecutando apagado forzado de Windows en 2s...");
+                            Log("====================================================");
+                        }
+                    });
+                } catch {}
+            });
         }
 
         private void InitializeComponent()

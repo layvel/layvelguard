@@ -1048,7 +1048,31 @@ namespace LayvelGuard
         {
             this.mainLogger = logger;
             InitializeComponent();
-            RunScan();
+            this.Shown += (s, e) => RunScan();
+        }
+
+        private void SafeInvoke(Action action)
+        {
+            if (this.IsDisposed || this.Disposing) return;
+            try {
+                if (this.InvokeRequired)
+                {
+                    if (this.IsHandleCreated)
+                    {
+                        this.Invoke(action);
+                    }
+                    else
+                    {
+                        this.HandleCreated += (s, e) => {
+                            try { if (this.InvokeRequired) this.Invoke(action); else action(); } catch {}
+                        };
+                    }
+                }
+                else
+                {
+                    action();
+                }
+            } catch {}
         }
 
         private void InitializeComponent()
@@ -1147,12 +1171,11 @@ namespace LayvelGuard
             chkListApps.Items.Clear();
             lblInfo.Text = "Escaneando Registro de Usuarios y Disco...";
             lblInfo.ForeColor = Color.FromArgb(56, 189, 248);
-            Application.DoEvents();
 
             ThreadPool.QueueUserWorkItem(state => {
                 scannedApps = Program.ScanProhibitedSoftware();
 
-                this.Invoke(new Action(() => {
+                SafeInvoke(() => {
                     chkListApps.Items.Clear();
                     int checkedCount = 0;
                     foreach (var app in scannedApps)
@@ -1171,7 +1194,7 @@ namespace LayvelGuard
                         lblInfo.Text = string.Format("⚠️ Detectadas {0} aplicaciones no autorizadas ({1} marcadas).", scannedApps.Count, checkedCount);
                         lblInfo.ForeColor = Color.FromArgb(251, 191, 36);
                     }
-                }));
+                });
             });
         }
 
@@ -1199,22 +1222,18 @@ namespace LayvelGuard
 
             ThreadPool.QueueUserWorkItem(state => {
                 Program.UninstallSpecificSoftware(selectedApps, (msg) => {
-                    try {
-                        this.Invoke(new Action(() => {
-                            lblInfo.Text = msg;
-                            if (mainLogger != null) mainLogger(msg);
-                        }));
-                    } catch {}
+                    SafeInvoke(() => {
+                        lblInfo.Text = msg;
+                        if (mainLogger != null) mainLogger(msg);
+                    });
                 });
 
-                try {
-                    this.Invoke(new Action(() => {
-                        btnUninstall.Enabled = true;
-                        btnRescan.Enabled = true;
-                        MessageBox.Show("Desinstalación y limpieza de Registro completadas con éxito.", "LayvelGuard Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        RunScan();
-                    }));
-                } catch {}
+                SafeInvoke(() => {
+                    btnUninstall.Enabled = true;
+                    btnRescan.Enabled = true;
+                    MessageBox.Show("Desinstalación y limpieza de Registro completadas con éxito.", "LayvelGuard Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    RunScan();
+                });
             });
         }
     }
@@ -1238,15 +1257,41 @@ namespace LayvelGuard
         public MainForm()
         {
             InitializeComponent();
-            CheckConnectionAsync();
-            RefreshStatusBadges();
-            StartTelemetryTimer();
+            this.Shown += (s, e) => {
+                CheckConnectionAsync();
+                RefreshStatusBadges();
+                StartTelemetryTimer();
+            };
+        }
+
+        private void SafeInvoke(Action action)
+        {
+            if (this.IsDisposed || this.Disposing) return;
+            try {
+                if (this.InvokeRequired)
+                {
+                    if (this.IsHandleCreated)
+                    {
+                        this.Invoke(action);
+                    }
+                    else
+                    {
+                        this.HandleCreated += (evSender, evArgs) => {
+                            try { if (this.InvokeRequired) this.Invoke(action); else action(); } catch {}
+                        };
+                    }
+                }
+                else
+                {
+                    action();
+                }
+            } catch {}
         }
 
         private void StartTelemetryTimer()
         {
             telemetryTimer = new System.Windows.Forms.Timer();
-            telemetryTimer.Interval = 10000; // Cada 10 segundos transmite estado a la API
+            telemetryTimer.Interval = 10000;
             telemetryTimer.Tick += (s, e) => CheckRemoteCommands();
             telemetryTimer.Start();
         }
@@ -1690,52 +1735,48 @@ namespace LayvelGuard
 
         private void RefreshStatusBadges()
         {
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(RefreshStatusBadges));
-                return;
-            }
-
-            try {
-                // 1. Bloqueo Web
-                bool isWebBlocked = false;
-                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Google\Chrome\URLBlocklist"))
-                {
-                    if (k != null) isWebBlocked = true;
-                }
-                UpdateBadge(badgeBlockWeb, btnToggleBlockWeb, isWebBlocked, "ACTIVADO", "DESACTIVADO");
-
-                // 2. Cuentas MS
-                bool isAccountsBlocked = false;
-                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
-                {
-                    if (k != null)
+            SafeInvoke(() => {
+                try {
+                    // 1. Bloqueo Web
+                    bool isWebBlocked = false;
+                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Google\Chrome\URLBlocklist"))
                     {
-                        object val = k.GetValue("NoConnectedUser");
-                        if (val != null && Convert.ToInt32(val) == 3) isAccountsBlocked = true;
+                        if (k != null) isWebBlocked = true;
                     }
-                }
-                UpdateBadge(badgeAccounts, btnToggleAccounts, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
+                    UpdateBadge(badgeBlockWeb, btnToggleBlockWeb, isWebBlocked, "ACTIVADO", "DESACTIVADO");
 
-                // 3. Fondo LayvelGuard
-                bool isWallpaperSet = File.Exists(@"C:\LayvelGuard\layvelguard_logo.png");
-                UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "APLICADO", "NO INSTALADO");
+                    // 2. Cuentas MS
+                    bool isAccountsBlocked = false;
+                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
+                    {
+                        if (k != null)
+                        {
+                            object val = k.GetValue("NoConnectedUser");
+                            if (val != null && Convert.ToInt32(val) == 3) isAccountsBlocked = true;
+                        }
+                    }
+                    UpdateBadge(badgeAccounts, btnToggleAccounts, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
 
-                // 4. Servicio Telemétrico
-                bool isServiceActive = false;
-                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"))
-                {
-                    if (k != null && k.GetValue("LayvelGuard") != null) isServiceActive = true;
-                }
-                UpdateBadge(badgeService, btnToggleService, isServiceActive, "ACTIVO EN SEGUNDO PLANO", "INACTIVO");
+                    // 3. Fondo LayvelGuard
+                    bool isWallpaperSet = File.Exists(@"C:\LayvelGuard\layvelguard_logo.png");
+                    UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "APLICADO", "NO INSTALADO");
 
-                // 5. Accesos Directos
-                bool shortcutsExist = File.Exists(@"C:\Users\Public\Desktop\Plataforma DIA.lnk");
-                UpdateBadge(badgeShortcuts, btnToggleShortcuts, shortcutsExist, "INSTALADOS", "FALTAN ACCESOS");
+                    // 4. Servicio Telemétrico
+                    bool isServiceActive = false;
+                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"))
+                    {
+                        if (k != null && k.GetValue("LayvelGuard") != null) isServiceActive = true;
+                    }
+                    UpdateBadge(badgeService, btnToggleService, isServiceActive, "ACTIVO EN SEGUNDO PLANO", "INACTIVO");
 
-                // 6. Desinstalación / Filtro Procesos
-                UpdateBadge(badgeUninstall, btnToggleUninstall, true, "SELECTOR INTERACTIVO", "PAUSADO");
-            } catch {}
+                    // 5. Accesos Directos
+                    bool shortcutsExist = File.Exists(@"C:\Users\Public\Desktop\Plataforma DIA.lnk");
+                    UpdateBadge(badgeShortcuts, btnToggleShortcuts, shortcutsExist, "INSTALADOS", "FALTAN ACCESOS");
+
+                    // 6. Desinstalación / Filtro Procesos
+                    UpdateBadge(badgeUninstall, btnToggleUninstall, true, "SELECTOR INTERACTIVO", "PAUSADO");
+                } catch {}
+            });
         }
 
         private void UpdateBadge(Label badge, Button btnToggle, bool active, string textActive, string textInactive)
@@ -1779,34 +1820,28 @@ namespace LayvelGuard
 
         private void Log(string msg)
         {
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(() => Log(msg)));
-                return;
-            }
-            string stamp = DateTime.Now.ToString("HH:mm:ss");
-            txtLog.AppendText(string.Format("[{0}] {1}\r\n", stamp, msg));
+            SafeInvoke(() => {
+                string stamp = DateTime.Now.ToString("HH:mm:ss");
+                txtLog.AppendText(string.Format("[{0}] {1}\r\n", stamp, msg));
+            });
         }
 
         private void SetProgress(int val)
         {
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(() => SetProgress(val)));
-                return;
-            }
-            progressBar.Value = val;
+            SafeInvoke(() => {
+                progressBar.Value = val;
+            });
         }
 
         private void CheckConnectionAsync()
         {
             ThreadPool.QueueUserWorkItem(state => {
-                this.Invoke(new Action(() => {
+                SafeInvoke(() => {
                     lblStatus.Text = "[v" + Program.CURRENT_VERSION + "] LayvelGuard Standalone (GitHub)";
                     lblStatus.ForeColor = Color.FromArgb(74, 222, 128);
                     Log("Iniciado LayvelGuard Pro v" + Program.CURRENT_VERSION + " Standalone.");
                     Log("Icono y Logo personalizado de Zote cargados correctamente.");
-                }));
+                });
             });
         }
 

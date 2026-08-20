@@ -22,7 +22,7 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.1.0";
+        public const string CURRENT_VERSION = "1.2.0";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
         public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
@@ -79,22 +79,24 @@ namespace LayvelGuard
 
                 // 1. Restaurar/Copiar Fondo CBMW
                 string cbmwFondo = Path.Combine(cbmwDir, "fondo.png");
-                if (!File.Exists(cbmwFondo))
+                if (!File.Exists(cbmwFondo) || new FileInfo(cbmwFondo).Length < 1000)
                 {
                     string[] sources = new string[] {
                         @"C:\Users\Profesor2\Downloads\lab\fondo pc.png",
                         @"C:\LayvelGuard\fondo_institucional.png",
                         @"C:\LayvelGuard\layvelguard_logo.png"
                     };
+                    bool copied = false;
                     foreach (string s in sources)
                     {
-                        if (File.Exists(s)) { try { File.Copy(s, cbmwFondo, true); break; } catch {} }
+                        if (File.Exists(s)) { try { File.Copy(s, cbmwFondo, true); copied = true; break; } catch {} }
                     }
+                    if (!copied) DownloadSingleAssetFromGitHub("Instituciones/CBMW/fondo.png", cbmwFondo);
                 }
 
                 // 2. Restaurar/Copiar Logo CBMW
                 string cbmwLogo = Path.Combine(cbmwDir, "logo.png");
-                if (!File.Exists(cbmwLogo))
+                if (!File.Exists(cbmwLogo) || new FileInfo(cbmwLogo).Length < 1000)
                 {
                     string[] sources = new string[] {
                         @"C:\Users\Profesor2\Downloads\lab\logo.png",
@@ -102,10 +104,12 @@ namespace LayvelGuard
                         @"C:\LayvelGuard\logo_institucional.png",
                         @"C:\LayvelGuard\layvelguard_logo.png"
                     };
+                    bool copied = false;
                     foreach (string s in sources)
                     {
-                        if (File.Exists(s)) { try { File.Copy(s, cbmwLogo, true); break; } catch {} }
+                        if (File.Exists(s)) { try { File.Copy(s, cbmwLogo, true); copied = true; break; } catch {} }
                     }
+                    if (!copied) DownloadSingleAssetFromGitHub("Instituciones/CBMW/logo.png", cbmwLogo);
                 }
 
                 // 3. Restablecer LayvelGuard por defecto
@@ -117,6 +121,37 @@ namespace LayvelGuard
                     if (!File.Exists(layFondo)) try { File.Copy(zoteSource, layFondo, true); } catch {}
                     if (!File.Exists(layLogo)) try { File.Copy(zoteSource, layLogo, true); } catch {}
                 }
+                else
+                {
+                    if (!File.Exists(layFondo)) DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/fondo.png", layFondo);
+                    if (!File.Exists(layLogo)) DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/logo.png", layLogo);
+                }
+            } catch {}
+        }
+
+        public static void DownloadSingleAssetFromGitHub(string gitRelPath, string localDest)
+        {
+            try {
+                using (WebClient wc = new WebClient())
+                {
+                    wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + CURRENT_VERSION;
+                    wc.Headers["Cache-Control"] = "no-cache";
+                    string url = "https://raw.githubusercontent.com/layvel/layvelguard/main/" + gitRelPath + "?nocache=" + Guid.NewGuid().ToString("N");
+                    wc.DownloadFile(url, localDest);
+                }
+            } catch {}
+        }
+
+        public static void SyncAllInstitutionAssetsFromGitHub()
+        {
+            try {
+                EnsureDefaultInstitutionsExist();
+                string cbmwFondo = Path.Combine(INST_DIR, @"CBMW\fondo.png");
+                string cbmwLogo = Path.Combine(INST_DIR, @"CBMW\logo.png");
+                DownloadSingleAssetFromGitHub("Instituciones/CBMW/fondo.png", cbmwFondo);
+                DownloadSingleAssetFromGitHub("Instituciones/CBMW/logo.png", cbmwLogo);
+                DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/fondo.png", Path.Combine(INST_DIR, @"LayvelGuard\fondo.png"));
+                DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/logo.png", Path.Combine(INST_DIR, @"LayvelGuard\logo.png"));
             } catch {}
         }
 
@@ -165,6 +200,8 @@ namespace LayvelGuard
 
                             if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 10000)
                             {
+                                SyncAllInstitutionAssetsFromGitHub();
+
                                 string batchUpdater = Path.Combine(APP_DIR, "update_layvelguard.bat");
                                 string script = string.Format(
                                     "@echo off\r\n" +
@@ -220,6 +257,7 @@ namespace LayvelGuard
                 EnforceLocalAccountsOnly();
                 
                 string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
+                if (!File.Exists(cbmwFondo)) EnsureDefaultInstitutionsExist();
                 if (File.Exists(cbmwFondo)) SetWallpapers(cbmwFondo);
 
                 string cbmwLogo = @"C:\LayvelGuard\Instituciones\CBMW\logo.png";
@@ -1983,7 +2021,7 @@ namespace LayvelGuard
                             if (remoteVer != Program.CURRENT_VERSION)
                             {
                                 Log(string.Format("-> !NUEVA VERSION DETECTADA EN GITHUB!: v{0} (Actual: v{1})", remoteVer, Program.CURRENT_VERSION));
-                                Log("-> Descargando ejecutable LayvelGuard.exe desde GitHub...");
+                                Log("-> Descargando ejecutable LayvelGuard.exe y paquetes de GitHub...");
 
                                 bool isUpdating = Program.CheckAndUpdateSelf(true);
                                 if (isUpdating)
@@ -1997,6 +2035,7 @@ namespace LayvelGuard
                             else
                             {
                                 Log(string.Format("-> LayvelGuard se encuentra en la versión más reciente en GitHub (v{0}).", remoteVer));
+                                Program.EnsureDefaultInstitutionsExist();
                             }
                         }
                         else
@@ -2207,7 +2246,7 @@ namespace LayvelGuard
         {
             SetProgress(10);
             Log("====================================================");
-            Log(" INICIANDO MANTENIMIENTO COMPLETO LAYVELGUARD v1.1.0 ");
+            Log(" INICIANDO MANTENIMIENTO COMPLETO LAYVELGUARD v1.2.0 ");
             Log("====================================================");
 
             SetProgress(20);
@@ -2226,6 +2265,7 @@ namespace LayvelGuard
 
             SetProgress(75);
             Log("[4/6] Aplicando Perfil Institucional CBMW (Fondo, Bloqueo y Perfil)...");
+            Program.EnsureDefaultInstitutionsExist();
             string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
             if (File.Exists(cbmwFondo)) {
                 Program.SetWallpapers(cbmwFondo);

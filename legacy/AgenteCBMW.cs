@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
-namespace LayvelGuard
+namespace AgenteCBMW
 {
     public struct ProhibitedAppInfo
     {
@@ -22,15 +22,12 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.3.0";
-        public const string APP_NAME = "LayvelGuard";
-        public const string APP_DIR = @"C:\LayvelGuard";
-        public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
-        public const string API_SECRET_TOKEN = "LAYVEL_SECURE_TOKEN_2026_x89a";
-        
-        // GitHub Repository Central URLs
-        private const string GITHUB_REPO_API = "https://api.github.com/repos/layvel/layvelguard/commits/main";
-        private const string LOG_FILE = @"C:\LayvelGuard\layvelguard.log";
+        public const string CURRENT_VERSION = "3.5.0";
+        private const string SERVER_URL = "https://sistemas.cbmw.cl";
+        private const string CONFIG_URL = "https://sistemas.cbmw.cl/lab-config.json";
+        private const string REPORT_URL = "https://sistemas.cbmw.cl/api/lab/reporte.php";
+        private const string EXE_REMOTE_URL = "https://sistemas.cbmw.cl/bat/Menu_Administracion_CBMW.exe";
+        private const string LOG_FILE = @"C:\CBMW\lab_log.txt";
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -41,13 +38,13 @@ namespace LayvelGuard
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
             ServicePointManager.ServerCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
-            if (!Directory.Exists(APP_DIR)) Directory.CreateDirectory(APP_DIR);
-            
-            EnsureDefaultInstitutionsExist();
+            if (!Directory.Exists(@"C:\CBMW")) Directory.CreateDirectory(@"C:\CBMW");
 
             CleanInvalidAutoLogon();
 
             if (CheckAndUpdateSelf(false)) return;
+
+            EnsureAssetsDownloaded();
 
             if (args != null && args.Length > 0 && (args[0] == "--silent-boot" || args[0] == "-silent"))
             {
@@ -64,111 +61,6 @@ namespace LayvelGuard
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
-        }
-
-        public static string GetLatestCommitSha()
-        {
-            try {
-                using (WebClient wc = new WebClient())
-                {
-                    wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + CURRENT_VERSION;
-                    string json = wc.DownloadString(GITHUB_REPO_API);
-                    string sha = ExtractJsonValue(json, "sha");
-                    if (!string.IsNullOrEmpty(sha) && sha.Length >= 7) return sha;
-                }
-            } catch {}
-            return "main";
-        }
-
-        public static void EnsureDefaultInstitutionsExist()
-        {
-            try {
-                if (!Directory.Exists(INST_DIR)) Directory.CreateDirectory(INST_DIR);
-
-                string cbmwDir = Path.Combine(INST_DIR, "CBMW");
-                string layvelDir = Path.Combine(INST_DIR, "LayvelGuard");
-
-                if (!Directory.Exists(cbmwDir)) Directory.CreateDirectory(cbmwDir);
-                if (!Directory.Exists(layvelDir)) Directory.CreateDirectory(layvelDir);
-
-                string sha = GetLatestCommitSha();
-
-                // 1. Restaurar/Copiar Fondo CBMW
-                string cbmwFondo = Path.Combine(cbmwDir, "fondo.png");
-                if (!File.Exists(cbmwFondo) || new FileInfo(cbmwFondo).Length < 1000)
-                {
-                    string[] sources = new string[] {
-                        @"C:\Users\Profesor2\Downloads\lab\fondo pc.png",
-                        @"C:\LayvelGuard\fondo_institucional.png",
-                        @"C:\LayvelGuard\layvelguard_logo.png"
-                    };
-                    bool copied = false;
-                    foreach (string s in sources)
-                    {
-                        if (File.Exists(s)) { try { File.Copy(s, cbmwFondo, true); copied = true; break; } catch {} }
-                    }
-                    if (!copied) DownloadSingleAssetFromGitHub("Instituciones/CBMW/fondo.png", cbmwFondo, sha);
-                }
-
-                // 2. Restaurar/Copiar Logo CBMW
-                string cbmwLogo = Path.Combine(cbmwDir, "logo.png");
-                if (!File.Exists(cbmwLogo) || new FileInfo(cbmwLogo).Length < 1000)
-                {
-                    string[] sources = new string[] {
-                        @"C:\Users\Profesor2\Downloads\lab\logo.png",
-                        @"C:\Users\Profesor2\Downloads\lab\cbmw_logo.jpg",
-                        @"C:\LayvelGuard\logo_institucional.png",
-                        @"C:\LayvelGuard\layvelguard_logo.png"
-                    };
-                    bool copied = false;
-                    foreach (string s in sources)
-                    {
-                        if (File.Exists(s)) { try { File.Copy(s, cbmwLogo, true); copied = true; break; } catch {} }
-                    }
-                    if (!copied) DownloadSingleAssetFromGitHub("Instituciones/CBMW/logo.png", cbmwLogo, sha);
-                }
-
-                // 3. Restablecer LayvelGuard por defecto
-                string layFondo = Path.Combine(layvelDir, "fondo.png");
-                string layLogo = Path.Combine(layvelDir, "logo.png");
-                string zoteSource = @"C:\LayvelGuard\layvelguard_logo.png";
-                if (File.Exists(zoteSource))
-                {
-                    if (!File.Exists(layFondo)) try { File.Copy(zoteSource, layFondo, true); } catch {}
-                    if (!File.Exists(layLogo)) try { File.Copy(zoteSource, layLogo, true); } catch {}
-                }
-                else
-                {
-                    if (!File.Exists(layFondo)) DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/fondo.png", layFondo, sha);
-                    if (!File.Exists(layLogo)) DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/logo.png", layLogo, sha);
-                }
-            } catch {}
-        }
-
-        public static void DownloadSingleAssetFromGitHub(string gitRelPath, string localDest, string sha = "main")
-        {
-            try {
-                using (WebClient wc = new WebClient())
-                {
-                    wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + CURRENT_VERSION;
-                    wc.Headers["Cache-Control"] = "no-cache";
-                    string url = string.Format("https://raw.githubusercontent.com/layvel/layvelguard/{0}/{1}", sha, gitRelPath);
-                    wc.DownloadFile(url, localDest);
-                }
-            } catch {}
-        }
-
-        public static void SyncAllInstitutionAssetsFromGitHub(string sha = "main")
-        {
-            try {
-                EnsureDefaultInstitutionsExist();
-                string cbmwFondo = Path.Combine(INST_DIR, @"CBMW\fondo.png");
-                string cbmwLogo = Path.Combine(INST_DIR, @"CBMW\logo.png");
-                DownloadSingleAssetFromGitHub("Instituciones/CBMW/fondo.png", cbmwFondo, sha);
-                DownloadSingleAssetFromGitHub("Instituciones/CBMW/logo.png", cbmwLogo, sha);
-                DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/fondo.png", Path.Combine(INST_DIR, @"LayvelGuard\fondo.png"), sha);
-                DownloadSingleAssetFromGitHub("Instituciones/LayvelGuard/logo.png", Path.Combine(INST_DIR, @"LayvelGuard\logo.png"), sha);
-            } catch {}
         }
 
         public static void CleanInvalidAutoLogon()
@@ -191,37 +83,52 @@ namespace LayvelGuard
             } catch {}
         }
 
+        public static void EnsureAssetsDownloaded()
+        {
+            try {
+                string wallPath = @"C:\CBMW\fondo_cbmw.png";
+                string logoPath = @"C:\CBMW\cbmw_logo.png";
+
+                using (WebClient wc = new WebClient())
+                {
+                    if (!File.Exists(wallPath) || new FileInfo(wallPath).Length < 1000)
+                    {
+                        wc.DownloadFile("https://sistemas.cbmw.cl/lab/fondo_cbmw.png?v=3.5.0", wallPath);
+                    }
+                    if (!File.Exists(logoPath) || new FileInfo(logoPath).Length < 1000)
+                    {
+                        wc.DownloadFile("https://sistemas.cbmw.cl/lab/cbmw_logo.png?v=3.5.0", logoPath);
+                    }
+                }
+            } catch {}
+        }
+
         public static bool CheckAndUpdateSelf(bool force = false)
         {
             try {
                 string exePath = Application.ExecutablePath;
+                if (!exePath.StartsWith(@"C:\CBMW", StringComparison.OrdinalIgnoreCase) && !force) return false;
 
                 using (WebClient wc = new WebClient())
                 {
-                    wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + CURRENT_VERSION;
-                    wc.Headers["Cache-Control"] = "no-cache";
-                    wc.Headers["Pragma"] = "no-cache";
-
-                    string sha = GetLatestCommitSha();
-                    string json = wc.DownloadString(string.Format("https://raw.githubusercontent.com/layvel/layvelguard/{0}/config.json", sha));
+                    string json = wc.DownloadString(CONFIG_URL + "?t=" + Environment.TickCount);
                     if (json.Contains("\"script_version\""))
                     {
                         string remoteVer = ExtractJsonValue(json, "script_version");
                         if (force || (!string.IsNullOrEmpty(remoteVer) && remoteVer != CURRENT_VERSION))
                         {
-                            string targetExe = Path.Combine(APP_DIR, "LayvelGuard.exe");
-                            string tempFile = Path.Combine(APP_DIR, "LayvelGuard_Update.exe");
+                            string targetExe = @"C:\CBMW\Menu_Administracion_CBMW.exe";
+                            string tempFile = @"C:\CBMW\Menu_Update.exe";
+                            if (!Directory.Exists(@"C:\CBMW")) Directory.CreateDirectory(@"C:\CBMW");
 
-                            wc.DownloadFile(string.Format("https://raw.githubusercontent.com/layvel/layvelguard/{0}/LayvelGuard.exe", sha), tempFile);
+                            wc.DownloadFile(EXE_REMOTE_URL + "?v=" + Environment.TickCount, tempFile);
 
                             if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 10000)
                             {
-                                SyncAllInstitutionAssetsFromGitHub(sha);
-
-                                string batchUpdater = Path.Combine(APP_DIR, "update_layvelguard.bat");
+                                string batchUpdater = @"C:\CBMW\update_agent.bat";
                                 string script = string.Format(
                                     "@echo off\r\n" +
-                                    "timeout /t 1 /nobreak > nul\r\n" +
+                                    "timeout /t 2 /nobreak > nul\r\n" +
                                     "copy /y \"{0}\" \"{1}\"\r\n" +
                                     "copy /y \"{0}\" \"{2}\"\r\n" +
                                     "del \"{0}\"\r\n" +
@@ -271,16 +178,15 @@ namespace LayvelGuard
                 InstallStartupTask();
                 DoBlockGames();
                 EnforceLocalAccountsOnly();
-                
-                string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
-                if (!File.Exists(cbmwFondo)) EnsureDefaultInstitutionsExist();
-                if (File.Exists(cbmwFondo)) SetWallpapers(cbmwFondo);
-
-                string cbmwLogo = @"C:\LayvelGuard\Instituciones\CBMW\logo.png";
-                if (File.Exists(cbmwLogo)) SetUserProfilePicture(cbmwLogo);
+                string wallPath = @"C:\CBMW\fondo_cbmw.png";
+                if (File.Exists(wallPath)) SetWallpapers(wallPath);
+                string logoPath = @"C:\CBMW\cbmw_logo.png";
+                if (File.Exists(logoPath)) SetUserProfilePicture(logoPath);
 
                 UninstallProhibitedSoftware(null);
                 List<string> detected = KillProhibitedProcesses();
+                List<string> inv = GetSoftwareInventory();
+                SendTelemetry("ONLINE", detected, inv, null);
             } catch {}
         }
 
@@ -361,39 +267,15 @@ namespace LayvelGuard
         public static void DoBlockGames()
         {
             try {
-                // 1. DNS Over HTTPS off & Chrome Profile/Signin Restrictions
-                string[] chromeKeys = new string[] {
+                // 1. DNS Over HTTPS off
+                string[] browserKeys = new string[] {
                     @"SOFTWARE\Policies\Google\Chrome",
-                    @"Software\Policies\Google\Chrome"
-                };
-
-                foreach (string key in chromeKeys)
-                {
-                    RegistryKey root = key.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? Registry.CurrentUser : Registry.LocalMachine;
-                    using (RegistryKey k = root.CreateSubKey(key))
-                    {
-                        if (k != null)
-                        {
-                            k.SetValue("DnsOverHttpsMode", "off", RegistryValueKind.String);
-                            k.SetValue("BuiltInDnsClientEnabled", 0, RegistryValueKind.DWord);
-                            k.SetValue("BrowserSignin", 0, RegistryValueKind.DWord);
-                            k.SetValue("SigninAllowed", 0, RegistryValueKind.DWord);
-                            k.SetValue("SyncDisabled", 1, RegistryValueKind.DWord);
-                            k.SetValue("EphemeralProfileEnabled", 1, RegistryValueKind.DWord);
-                            k.SetValue("BrowserAddPersonEnabled", 0, RegistryValueKind.DWord);
-                            k.SetValue("ProfilePickerOnStartupEnabled", 0, RegistryValueKind.DWord);
-                            k.SetValue("RestrictSigninToPattern", ".*@invalid.domain", RegistryValueKind.String);
-                        }
-                    }
-                }
-
-                // 2. Edge Policies
-                string[] edgeKeys = new string[] {
+                    @"Software\Policies\Google\Chrome",
                     @"SOFTWARE\Policies\Microsoft\Edge",
                     @"Software\Policies\Microsoft\Edge"
                 };
 
-                foreach (string key in edgeKeys)
+                foreach (string key in browserKeys)
                 {
                     RegistryKey root = key.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? Registry.CurrentUser : Registry.LocalMachine;
                     using (RegistryKey k = root.CreateSubKey(key))
@@ -402,14 +284,11 @@ namespace LayvelGuard
                         {
                             k.SetValue("DnsOverHttpsMode", "off", RegistryValueKind.String);
                             k.SetValue("BuiltInDnsClientEnabled", 0, RegistryValueKind.DWord);
-                            k.SetValue("BrowserSignin", 0, RegistryValueKind.DWord);
-                            k.SetValue("SyncDisabled", 1, RegistryValueKind.DWord);
-                            k.SetValue("HideFirstRunExperience", 1, RegistryValueKind.DWord);
                         }
                     }
                 }
 
-                // 3. URLBlocklist (Roblox, Minecraft, Steam, Games)
+                // 2. URLBlocklist (Roblox, Minecraft, Steam, Games)
                 string[] blockPatterns = new string[] {
                     "*roblox.com*", "*roblox.es*", "*rbxcdn.com*", "*minecraft.net*", "*minecraft.com*",
                     "*steampowered.com*", "*steamcommunity.com*", "*store.steampowered.com*", "*epicgames.com*"
@@ -439,7 +318,7 @@ namespace LayvelGuard
                     }
                 }
 
-                // 4. Hosts File (IPv4 e IPv6)
+                // 3. Hosts File (IPv4 e IPv6)
                 string hostsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"drivers\etc\hosts");
                 if (File.Exists(hostsPath))
                 {
@@ -485,23 +364,6 @@ namespace LayvelGuard
                 {
                     RegistryKey root = key.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? Registry.CurrentUser : Registry.LocalMachine;
                     try { root.DeleteSubKeyTree(key); } catch {}
-                }
-
-                // Restablecer valores de sesion en Chrome
-                string[] chromeKeys = new string[] { @"SOFTWARE\Policies\Google\Chrome", @"Software\Policies\Google\Chrome" };
-                foreach (string key in chromeKeys) {
-                    RegistryKey root = key.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? Registry.CurrentUser : Registry.LocalMachine;
-                    using (RegistryKey k = root.OpenSubKey(key, true)) {
-                        if (k != null) {
-                            try { k.DeleteValue("BrowserSignin", false); } catch {}
-                            try { k.DeleteValue("SigninAllowed", false); } catch {}
-                            try { k.DeleteValue("SyncDisabled", false); } catch {}
-                            try { k.DeleteValue("EphemeralProfileEnabled", false); } catch {}
-                            try { k.DeleteValue("BrowserAddPersonEnabled", false); } catch {}
-                            try { k.DeleteValue("ProfilePickerOnStartupEnabled", false); } catch {}
-                            try { k.DeleteValue("RestrictSigninToPattern", false); } catch {}
-                        }
-                    }
                 }
 
                 string hostsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"drivers\etc\hosts");
@@ -553,12 +415,12 @@ namespace LayvelGuard
         public static void InstallStartupTask(bool enable = true)
         {
             try {
-                string exePath = Path.Combine(APP_DIR, "LayvelGuard.exe");
+                string exePath = @"C:\CBMW\Menu_Administracion_CBMW.exe";
                 if (!File.Exists(exePath)) exePath = Application.ExecutablePath;
 
                 if (enable)
                 {
-                    ProcessStartInfo psi = new ProcessStartInfo("schtasks", string.Format("/create /tn \"LayvelGuard_Daemon\" /tr \"\\\"{0}\\\" --silent-boot\" /sc ONSTART /ru \"SYSTEM\" /rl HIGHEST /f", exePath));
+                    ProcessStartInfo psi = new ProcessStartInfo("schtasks", string.Format("/create /tn \"CBMW_Heartbeat_Daemon\" /tr \"\\\"{0}\\\" --silent-boot\" /sc ONSTART /ru \"SYSTEM\" /rl HIGHEST /f", exePath));
                     psi.CreateNoWindow = true;
                     psi.UseShellExecute = false;
                     Process p = Process.Start(psi);
@@ -566,12 +428,12 @@ namespace LayvelGuard
 
                     using (RegistryKey k = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"))
                     {
-                        if (k != null) k.SetValue("LayvelGuard", "\"" + exePath + "\" --silent-boot", RegistryValueKind.String);
+                        if (k != null) k.SetValue("AgenteCBMW", "\"" + exePath + "\" --silent-boot", RegistryValueKind.String);
                     }
                 }
                 else
                 {
-                    ProcessStartInfo psi = new ProcessStartInfo("schtasks", "/delete /tn \"LayvelGuard_Daemon\" /f");
+                    ProcessStartInfo psi = new ProcessStartInfo("schtasks", "/delete /tn \"CBMW_Heartbeat_Daemon\" /f");
                     psi.CreateNoWindow = true;
                     psi.UseShellExecute = false;
                     Process p = Process.Start(psi);
@@ -579,7 +441,7 @@ namespace LayvelGuard
 
                     using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
                     {
-                        if (k != null) k.DeleteValue("LayvelGuard", false);
+                        if (k != null) k.DeleteValue("AgenteCBMW", false);
                     }
                 }
             } catch {}
@@ -589,6 +451,7 @@ namespace LayvelGuard
         {
             List<ProhibitedAppInfo> found = new List<ProhibitedAppInfo>();
             
+            // Palabras clave prohibidas (Juegos, Torrents, Navegadores no Edge/Chrome, Antivirus no Defender)
             string[] prohibitedKeywords = new string[] {
                 // Juegos & Launchers
                 "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
@@ -886,7 +749,7 @@ namespace LayvelGuard
                     } catch {}
                 }
 
-                // LIMPIEZA DE REGISTRO HUÉRFANO
+                // LIMPIEZA DE REGISTRO HUÉRFANO (Para evitar que vuelva a aparecer)
                 if (!string.IsNullOrEmpty(app.KeyPath))
                 {
                     try {
@@ -1091,179 +954,6 @@ namespace LayvelGuard
             } catch {}
         }
 
-        public static void ResetBrowserUserData(Action<string> logger = null)
-        {
-            try {
-                if (logger != null) logger("Cerrando procesos de Chrome, Edge y servicios de actualización...");
-                string[] procNames = new string[] { "chrome", "msedge", "GoogleUpdate", "GoogleCrashHandler" };
-                foreach (string pName in procNames)
-                {
-                    try {
-                        foreach (Process p in Process.GetProcessesByName(pName))
-                        {
-                            p.Kill();
-                        }
-                    } catch {}
-                }
-                Thread.Sleep(1500);
-
-                if (logger != null) logger("Buscando y eliminando carpetas 'User Data' en C:\\Users...");
-                string systemDrive = Path.GetPathRoot(Environment.SystemDirectory);
-                string usersDir = Path.Combine(systemDrive, "Users");
-
-                if (Directory.Exists(usersDir))
-                {
-                    foreach (string userFolder in Directory.GetDirectories(usersDir))
-                    {
-                        string chromeUserData = Path.Combine(userFolder, @"AppData\Local\Google\Chrome\User Data");
-                        if (Directory.Exists(chromeUserData))
-                        {
-                            try {
-                                Directory.Delete(chromeUserData, true);
-                                if (logger != null) logger("   - User Data de Chrome eliminado en: " + Path.GetFileName(userFolder));
-                            } catch {}
-                        }
-
-                        string edgeUserData = Path.Combine(userFolder, @"AppData\Local\Microsoft\Edge\User Data");
-                        if (Directory.Exists(edgeUserData))
-                        {
-                            try {
-                                Directory.Delete(edgeUserData, true);
-                                if (logger != null) logger("   - User Data de Edge eliminado en: " + Path.GetFileName(userFolder));
-                            } catch {}
-                        }
-                    }
-                }
-                if (logger != null) logger("Reset Radical de perfiles de navegadores completado.");
-            } catch (Exception ex) {
-                if (logger != null) logger("Aviso en reset de navegadores: " + ex.Message);
-            }
-        }
-
-        public static void CleanDownloadsAndDesktop(Action<string> logger = null)
-        {
-            try {
-                if (logger != null) logger("Iniciando limpieza de Descargas y accesos del Escritorio...");
-                string systemDrive = Path.GetPathRoot(Environment.SystemDirectory);
-                string usersDir = Path.Combine(systemDrive, "Users");
-
-                string[] targetExts = new string[] { ".exe", ".msi", ".bat", ".cmd", ".ps1", ".zip", ".rar", ".7z", ".iso" };
-
-                if (Directory.Exists(usersDir))
-                {
-                    foreach (string userFolder in Directory.GetDirectories(usersDir))
-                    {
-                        // 1. Clean Downloads
-                        string downloadsDir = Path.Combine(userFolder, "Downloads");
-                        if (Directory.Exists(downloadsDir))
-                        {
-                            try {
-                                DirectoryInfo dInfo = new DirectoryInfo(downloadsDir);
-                                foreach (FileInfo file in dInfo.GetFiles())
-                                {
-                                    string ext = file.Extension.ToLower();
-                                    if (Array.Exists(targetExts, e => e == ext))
-                                    {
-                                        try {
-                                            file.Delete();
-                                            if (logger != null) logger("   - Eliminado de Descargas (" + Path.GetFileName(userFolder) + "): " + file.Name);
-                                        } catch {}
-                                    }
-                                }
-                            } catch {}
-                        }
-
-                        // 2. Clean Desktop clutter / game shortcuts
-                        string desktopDir = Path.Combine(userFolder, "Desktop");
-                        if (Directory.Exists(desktopDir))
-                        {
-                            try {
-                                DirectoryInfo dInfo = new DirectoryInfo(desktopDir);
-                                foreach (FileInfo file in dInfo.GetFiles("*.lnk"))
-                                {
-                                    string fName = file.Name.ToLower();
-                                    if (fName.Contains("roblox") || fName.Contains("minecraft") || fName.Contains("steam"))
-                                    {
-                                        try {
-                                            file.Delete();
-                                            if (logger != null) logger("   - Acceso basura eliminado (" + Path.GetFileName(userFolder) + "): " + file.Name);
-                                        } catch {}
-                                    }
-                                }
-                            } catch {}
-                        }
-                    }
-                }
-
-                // Public Desktop
-                string publicDesk = @"C:\Users\Public\Desktop";
-                if (Directory.Exists(publicDesk))
-                {
-                    try {
-                        DirectoryInfo dInfo = new DirectoryInfo(publicDesk);
-                        foreach (FileInfo file in dInfo.GetFiles("*.lnk"))
-                        {
-                            string fName = file.Name.ToLower();
-                            if (fName.Contains("roblox") || fName.Contains("minecraft") || fName.Contains("steam"))
-                            {
-                                try { file.Delete(); } catch {}
-                            }
-                        }
-                    } catch {}
-                }
-
-                if (logger != null) logger("Limpieza de Descargas y Escritorio finalizada.");
-            } catch (Exception ex) {
-                if (logger != null) logger("Aviso en limpieza de Descargas: " + ex.Message);
-            }
-        }
-
-        public static void PurgeRobloxMinecraftAppData(Action<string> logger = null)
-        {
-            try {
-                if (logger != null) logger("Cerrando procesos y eliminando carpetas residuales de Roblox/Minecraft...");
-                string[] procNames = new string[] { "RobloxPlayerBeta", "RobloxStudio", "Minecraft", "javaw", "MinecraftLauncher" };
-                foreach (string pName in procNames)
-                {
-                    try {
-                        foreach (Process p in Process.GetProcessesByName(pName)) p.Kill();
-                    } catch {}
-                }
-                Thread.Sleep(1000);
-
-                string systemDrive = Path.GetPathRoot(Environment.SystemDirectory);
-                string usersDir = Path.Combine(systemDrive, "Users");
-
-                if (Directory.Exists(usersDir))
-                {
-                    foreach (string userFolder in Directory.GetDirectories(usersDir))
-                    {
-                        string[] relPaths = new string[] {
-                            @"AppData\Local\Roblox",
-                            @"AppData\LocalLow\RbxLogs",
-                            @"AppData\Roaming\Roblox",
-                            @"AppData\Roaming\.minecraft",
-                            @"AppData\Local\Programs\Minecraft Launcher"
-                        };
-
-                        foreach (string rel in relPaths)
-                        {
-                            string target = Path.Combine(userFolder, rel);
-                            if (Directory.Exists(target))
-                            {
-                                try {
-                                    Directory.Delete(target, true);
-                                    if (logger != null) logger("   - Carpetas residuales eliminadas: " + rel + " (" + Path.GetFileName(userFolder) + ")");
-                                } catch {}
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                if (logger != null) logger("Aviso en purga Roblox/Minecraft: " + ex.Message);
-            }
-        }
-
         public static void SendTelemetry(string status, List<string> detected, List<string> inventory, Action<string> onCommandReceived)
         {
             try {
@@ -1282,7 +972,6 @@ namespace LayvelGuard
 
                 StringBuilder sb = new StringBuilder();
                 sb.Append("{");
-                sb.AppendFormat("\"api_token\":\"{0}\",", API_SECRET_TOKEN);
                 sb.AppendFormat("\"hostname\":\"{0}\",", Environment.MachineName);
                 sb.AppendFormat("\"username\":\"{0}\",", Environment.UserName);
                 sb.AppendFormat("\"ip\":\"{0}\",", localIp);
@@ -1300,9 +989,8 @@ namespace LayvelGuard
                 sb.Append("}");
 
                 byte[] data = Encoding.UTF8.GetBytes(sb.ToString());
-                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("https://sistemas.cbmw.cl/api/lab/reporte.php");
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(REPORT_URL);
                 req.Method = "POST";
-                req.Headers["X-API-Token"] = API_SECRET_TOKEN;
                 req.ContentType = "application/json";
                 req.ContentLength = data.Length;
                 req.Timeout = 5000;
@@ -1327,7 +1015,7 @@ namespace LayvelGuard
                             Thread.Sleep(2000);
 
                             try {
-                                ProcessStartInfo psi = new ProcessStartInfo("shutdown.exe", "/s /f /t 1 /c \"Apagado remoto solicitado desde Dashboard Web\"");
+                                ProcessStartInfo psi = new ProcessStartInfo("shutdown.exe", "/s /f /t 1 /c \"Apagado remoto solicitado desde Dashboard Web CBMW\"");
                                 psi.CreateNoWindow = true;
                                 psi.UseShellExecute = false;
                                 Process.Start(psi);
@@ -1376,295 +1064,6 @@ namespace LayvelGuard
         }
     }
 
-    public class InstitutionSelectorForm : Form
-    {
-        private ComboBox cmbInstitutions;
-        private PictureBox picPreviewFondo;
-        private PictureBox picPreviewLogo;
-        private Button btnApply;
-        private Button btnAddNew;
-        private Button btnClose;
-        private Action<string> mainLogger;
-        private string instRootDir = @"C:\LayvelGuard\Instituciones";
-
-        public InstitutionSelectorForm(Action<string> logger)
-        {
-            this.mainLogger = logger;
-            InitializeComponent();
-            this.Shown += (s, e) => LoadInstitutions();
-        }
-
-        private void InitializeComponent()
-        {
-            this.Text = "LayvelGuard Pro - Gestor de Perfiles de Institución (Personalización)";
-            this.Size = new Size(650, 480);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.FromArgb(15, 23, 42);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-
-            Panel header = new Panel();
-            header.Dock = DockStyle.Top;
-            header.Height = 70;
-            header.BackColor = Color.FromArgb(30, 41, 59);
-            header.Padding = new Padding(15, 10, 15, 10);
-
-            Label lblTitle = new Label();
-            lblTitle.Text = "🏫 Perfiles Institucionales (Fondo de Escritorio, Bloqueo y Logo)";
-            lblTitle.Font = new Font("Segoe UI", 11.5f, FontStyle.Bold);
-            lblTitle.ForeColor = Color.White;
-            lblTitle.Location = new Point(15, 12);
-            lblTitle.AutoSize = true;
-            header.Controls.Add(lblTitle);
-
-            Label lblSub = new Label();
-            lblSub.Text = "Seleccione la institución para aplicar su fondo de escritorio, pantalla de bloqueo y foto de perfil.";
-            lblSub.Font = new Font("Segoe UI", 8.5f);
-            lblSub.ForeColor = Color.FromArgb(148, 163, 184);
-            lblSub.Location = new Point(15, 38);
-            lblSub.AutoSize = true;
-            header.Controls.Add(lblSub);
-
-            this.Controls.Add(header);
-
-            Label lblSelect = new Label();
-            lblSelect.Text = "Seleccionar Institución:";
-            lblSelect.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            lblSelect.ForeColor = Color.FromArgb(241, 245, 249);
-            lblSelect.Location = new Point(25, 90);
-            lblSelect.AutoSize = true;
-            this.Controls.Add(lblSelect);
-
-            cmbInstitutions = new ComboBox();
-            cmbInstitutions.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbInstitutions.Font = new Font("Segoe UI", 10f);
-            cmbInstitutions.Location = new Point(200, 87);
-            cmbInstitutions.Size = new Size(270, 28);
-            cmbInstitutions.SelectedIndexChanged += (s, e) => UpdatePreviews();
-            this.Controls.Add(cmbInstitutions);
-
-            btnAddNew = new Button();
-            btnAddNew.Text = "➕ Nueva...";
-            btnAddNew.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            btnAddNew.BackColor = Color.FromArgb(59, 130, 246);
-            btnAddNew.ForeColor = Color.White;
-            btnAddNew.FlatStyle = FlatStyle.Flat;
-            btnAddNew.FlatAppearance.BorderSize = 0;
-            btnAddNew.Size = new Size(130, 28);
-            btnAddNew.Location = new Point(480, 87);
-            btnAddNew.Cursor = Cursors.Hand;
-            btnAddNew.Click += (s, e) => AddNewInstitution();
-            this.Controls.Add(btnAddNew);
-
-            // Previews Panel
-            Panel previewBox = new Panel();
-            previewBox.Location = new Point(25, 130);
-            previewBox.Size = new Size(585, 230);
-            previewBox.BackColor = Color.FromArgb(30, 41, 59);
-
-            Label lblPrevFondo = new Label();
-            lblPrevFondo.Text = "Fondo de Pantalla / Bloqueo:";
-            lblPrevFondo.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            lblPrevFondo.ForeColor = Color.FromArgb(148, 163, 184);
-            lblPrevFondo.Location = new Point(15, 10);
-            lblPrevFondo.AutoSize = true;
-            previewBox.Controls.Add(lblPrevFondo);
-
-            picPreviewFondo = new PictureBox();
-            picPreviewFondo.Location = new Point(15, 35);
-            picPreviewFondo.Size = new Size(340, 180);
-            picPreviewFondo.SizeMode = PictureBoxSizeMode.Zoom;
-            picPreviewFondo.BackColor = Color.FromArgb(15, 23, 42);
-            previewBox.Controls.Add(picPreviewFondo);
-
-            Label lblPrevLogo = new Label();
-            lblPrevLogo.Text = "Foto Perfil Usuario:";
-            lblPrevLogo.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            lblPrevLogo.ForeColor = Color.FromArgb(148, 163, 184);
-            lblPrevLogo.Location = new Point(380, 10);
-            lblPrevLogo.AutoSize = true;
-            previewBox.Controls.Add(lblPrevLogo);
-
-            picPreviewLogo = new PictureBox();
-            picPreviewLogo.Location = new Point(380, 35);
-            picPreviewLogo.Size = new Size(180, 180);
-            picPreviewLogo.SizeMode = PictureBoxSizeMode.Zoom;
-            picPreviewLogo.BackColor = Color.FromArgb(15, 23, 42);
-            previewBox.Controls.Add(picPreviewLogo);
-
-            this.Controls.Add(previewBox);
-
-            btnApply = new Button();
-            btnApply.Text = "🖼️ Aplicar Perfil Institucional";
-            btnApply.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            btnApply.BackColor = Color.FromArgb(16, 185, 129);
-            btnApply.ForeColor = Color.White;
-            btnApply.FlatStyle = FlatStyle.Flat;
-            btnApply.FlatAppearance.BorderSize = 0;
-            btnApply.Size = new Size(270, 40);
-            btnApply.Location = new Point(25, 375);
-            btnApply.Cursor = Cursors.Hand;
-            btnApply.Click += (s, e) => ApplySelectedInstitution();
-            this.Controls.Add(btnApply);
-
-            btnClose = new Button();
-            btnClose.Text = "Cerrar";
-            btnClose.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            btnClose.BackColor = Color.FromArgb(71, 85, 105);
-            btnClose.ForeColor = Color.White;
-            btnClose.FlatStyle = FlatStyle.Flat;
-            btnClose.FlatAppearance.BorderSize = 0;
-            btnClose.Size = new Size(120, 40);
-            btnClose.Location = new Point(490, 375);
-            btnClose.Cursor = Cursors.Hand;
-            btnClose.Click += (s, e) => this.Close();
-            this.Controls.Add(btnClose);
-        }
-
-        private void LoadInstitutions()
-        {
-            try {
-                Program.EnsureDefaultInstitutionsExist();
-
-                cmbInstitutions.Items.Clear();
-                string[] dirs = Directory.GetDirectories(instRootDir);
-                foreach (string d in dirs)
-                {
-                    cmbInstitutions.Items.Add(Path.GetFileName(d));
-                }
-
-                if (cmbInstitutions.Items.Count > 0)
-                {
-                    int cbmwIdx = cmbInstitutions.FindStringExact("CBMW");
-                    cmbInstitutions.SelectedIndex = (cbmwIdx != -1) ? cbmwIdx : 0;
-                }
-            } catch {}
-        }
-
-        private void UpdatePreviews()
-        {
-            if (cmbInstitutions.SelectedItem == null) return;
-            string instName = cmbInstitutions.SelectedItem.ToString();
-            string instPath = Path.Combine(instRootDir, instName);
-
-            string fondoPath = Path.Combine(instPath, "fondo.png");
-            if (!File.Exists(fondoPath)) fondoPath = Path.Combine(instPath, "fondo.jpg");
-
-            string logoPath = Path.Combine(instPath, "logo.png");
-            if (!File.Exists(logoPath)) logoPath = Path.Combine(instPath, "logo.jpg");
-
-            if (File.Exists(fondoPath))
-            {
-                try {
-                    using (var stream = new FileStream(fondoPath, FileMode.Open, FileAccess.Read))
-                    {
-                        picPreviewFondo.Image = Image.FromStream(stream);
-                    }
-                } catch { picPreviewFondo.Image = null; }
-            }
-            else picPreviewFondo.Image = null;
-
-            if (File.Exists(logoPath))
-            {
-                try {
-                    using (var stream = new FileStream(logoPath, FileMode.Open, FileAccess.Read))
-                    {
-                        picPreviewLogo.Image = Image.FromStream(stream);
-                    }
-                } catch { picPreviewLogo.Image = null; }
-            }
-            else picPreviewLogo.Image = null;
-        }
-
-        private void AddNewInstitution()
-        {
-            string name = PromptInput("Nueva Institución", "Ingrese el nombre de la nueva institución o colegio:");
-            if (string.IsNullOrWhiteSpace(name)) return;
-
-            string newDir = Path.Combine(instRootDir, name);
-            if (!Directory.Exists(newDir)) Directory.CreateDirectory(newDir);
-
-            MessageBox.Show("Seleccione la imagen para el Fondo de Pantalla / Bloqueo (fondo.png).", "Fondo de Pantalla", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            using (OpenFileDialog dlg = new OpenFileDialog())
-            {
-                dlg.Title = "Seleccionar Fondo para " + name;
-                dlg.Filter = "Archivos de Imagen (*.png;*.jpg)|*.png;*.jpg";
-                if (dlg.ShowDialog() == DialogResult.OK)
-                {
-                    File.Copy(dlg.FileName, Path.Combine(newDir, "fondo.png"), true);
-                }
-            }
-
-            MessageBox.Show("Seleccione la imagen para el Logo / Perfil de Usuario (logo.png).", "Foto de Perfil", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            using (OpenFileDialog dlg = new OpenFileDialog())
-            {
-                dlg.Title = "Seleccionar Logo/Perfil para " + name;
-                dlg.Filter = "Archivos de Imagen (*.png;*.jpg)|*.png;*.jpg";
-                if (dlg.ShowDialog() == DialogResult.OK)
-                {
-                    File.Copy(dlg.FileName, Path.Combine(newDir, "logo.png"), true);
-                }
-            }
-
-            LoadInstitutions();
-            int idx = cmbInstitutions.FindStringExact(name);
-            if (idx != -1) cmbInstitutions.SelectedIndex = idx;
-        }
-
-        private string PromptInput(string title, string prompt)
-        {
-            Form promptForm = new Form();
-            promptForm.Width = 420;
-            promptForm.Height = 180;
-            promptForm.Text = title;
-            promptForm.StartPosition = FormStartPosition.CenterParent;
-            promptForm.BackColor = Color.FromArgb(15, 23, 42);
-            promptForm.FormBorderStyle = FormBorderStyle.FixedDialog;
-
-            Label lbl = new Label() { Left = 20, Top = 15, Text = prompt, AutoSize = true, ForeColor = Color.White, Font = new Font("Segoe UI", 9.5f) };
-            TextBox tb = new TextBox() { Left = 20, Top = 45, Width = 360, Font = new Font("Segoe UI", 10f) };
-            Button confirm = new Button() { Text = "Aceptar", Left = 240, Width = 70, Top = 85, DialogResult = DialogResult.OK, BackColor = Color.FromArgb(16, 185, 129), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
-            Button cancel = new Button() { Text = "Cancelar", Left = 315, Width = 65, Top = 85, DialogResult = DialogResult.Cancel, BackColor = Color.FromArgb(71, 85, 105), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
-
-            promptForm.Controls.Add(lbl);
-            promptForm.Controls.Add(tb);
-            promptForm.Controls.Add(confirm);
-            promptForm.Controls.Add(cancel);
-            promptForm.AcceptButton = confirm;
-
-            return promptForm.ShowDialog() == DialogResult.OK ? tb.Text.Trim() : "";
-        }
-
-        private void ApplySelectedInstitution()
-        {
-            if (cmbInstitutions.SelectedItem == null) return;
-            string instName = cmbInstitutions.SelectedItem.ToString();
-            string instPath = Path.Combine(instRootDir, instName);
-
-            string fondoPath = Path.Combine(instPath, "fondo.png");
-            if (!File.Exists(fondoPath)) fondoPath = Path.Combine(instPath, "fondo.jpg");
-
-            string logoPath = Path.Combine(instPath, "logo.png");
-            if (!File.Exists(logoPath)) logoPath = Path.Combine(instPath, "logo.jpg");
-
-            btnApply.Enabled = false;
-            ThreadPool.QueueUserWorkItem(state => {
-                if (File.Exists(fondoPath)) Program.SetWallpapers(fondoPath);
-                if (File.Exists(logoPath)) Program.SetUserProfilePicture(logoPath);
-
-                try {
-                    this.Invoke(new Action(() => {
-                        btnApply.Enabled = true;
-                        if (mainLogger != null) mainLogger(string.Format("Perfil Institucional '{0}' aplicado con éxito (Fondo de escritorio, bloqueo y foto de usuario).", instName));
-                        MessageBox.Show(string.Format("Perfil de '{0}' aplicado con éxito.\r\nFondo de pantalla, bloqueo y foto de perfil actualizados.", instName), "LayvelGuard", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        this.Close();
-                    }));
-                } catch {}
-            });
-        }
-    }
-
     public class UninstallManagerForm : Form
     {
         private CheckedListBox chkListApps;
@@ -1677,36 +1076,12 @@ namespace LayvelGuard
         {
             this.mainLogger = logger;
             InitializeComponent();
-            this.Shown += (s, e) => RunScan();
-        }
-
-        private void SafeInvoke(Action action)
-        {
-            if (this.IsDisposed || this.Disposing) return;
-            try {
-                if (this.InvokeRequired)
-                {
-                    if (this.IsHandleCreated)
-                    {
-                        this.Invoke(action);
-                    }
-                    else
-                    {
-                        this.HandleCreated += (s, e) => {
-                            try { if (this.InvokeRequired) this.Invoke(action); else action(); } catch {}
-                        };
-                    }
-                }
-                else
-                {
-                    action();
-                }
-            } catch {}
+            RunScan();
         }
 
         private void InitializeComponent()
         {
-            this.Text = "LayvelGuard Pro - Selector y Desinstalador de Aplicaciones (v" + Program.CURRENT_VERSION + ")";
+            this.Text = "CBMW - Selector y Desinstalador de Aplicaciones (v" + Program.CURRENT_VERSION + ")";
             this.Size = new Size(720, 560);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(15, 23, 42); // Slate 900
@@ -1721,7 +1096,7 @@ namespace LayvelGuard
             header.Padding = new Padding(15, 10, 15, 10);
 
             Label lblTitle = new Label();
-            lblTitle.Text = "🔍 LayvelGuard - Escáner e Desinstalador Interactivo (v" + Program.CURRENT_VERSION + ")";
+            lblTitle.Text = "🔍 Escáner e Desinstalador Interactivo de Software (v" + Program.CURRENT_VERSION + ")";
             lblTitle.Font = new Font("Segoe UI", 12, FontStyle.Bold);
             lblTitle.ForeColor = Color.White;
             lblTitle.Location = new Point(15, 12);
@@ -1729,7 +1104,7 @@ namespace LayvelGuard
             header.Controls.Add(lblTitle);
 
             Label lblSub = new Label();
-            lblSub.Text = "Permitidos solo Chrome y Edge (Browsers) y Defender (Antivirus). Demás no autorizados vienen marcados.";
+            lblSub.Text = "Permitidos solo Chrome y Edge (Browsers) y Windows Defender (Antivirus). Demás no autorizados vienen marcados.";
             lblSub.Font = new Font("Segoe UI", 8.5f);
             lblSub.ForeColor = Color.FromArgb(148, 163, 184);
             lblSub.Location = new Point(15, 38);
@@ -1800,16 +1175,17 @@ namespace LayvelGuard
             chkListApps.Items.Clear();
             lblInfo.Text = "Escaneando Registro de Usuarios y Disco...";
             lblInfo.ForeColor = Color.FromArgb(56, 189, 248);
+            Application.DoEvents();
 
             ThreadPool.QueueUserWorkItem(state => {
                 scannedApps = Program.ScanProhibitedSoftware();
 
-                SafeInvoke(() => {
+                this.Invoke(new Action(() => {
                     chkListApps.Items.Clear();
                     int checkedCount = 0;
                     foreach (var app in scannedApps)
                     {
-                        chkListApps.Items.Add(app.Name, true);
+                        chkListApps.Items.Add(app.Name, true); // Seleccionadas por defecto
                         checkedCount++;
                     }
 
@@ -1823,7 +1199,7 @@ namespace LayvelGuard
                         lblInfo.Text = string.Format("⚠️ Detectadas {0} aplicaciones no autorizadas ({1} marcadas).", scannedApps.Count, checkedCount);
                         lblInfo.ForeColor = Color.FromArgb(251, 191, 36);
                     }
-                });
+                }));
             });
         }
 
@@ -1831,7 +1207,7 @@ namespace LayvelGuard
         {
             if (chkListApps.CheckedItems.Count == 0)
             {
-                MessageBox.Show("Por favor seleccione al menos una aplicación para desinstalar.", "LayvelGuard", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Por favor seleccione al menos una aplicación para desinstalar.", "Aviso CBMW", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -1851,18 +1227,22 @@ namespace LayvelGuard
 
             ThreadPool.QueueUserWorkItem(state => {
                 Program.UninstallSpecificSoftware(selectedApps, (msg) => {
-                    SafeInvoke(() => {
-                        lblInfo.Text = msg;
-                        if (mainLogger != null) mainLogger(msg);
-                    });
+                    try {
+                        this.Invoke(new Action(() => {
+                            lblInfo.Text = msg;
+                            if (mainLogger != null) mainLogger(msg);
+                        }));
+                    } catch {}
                 });
 
-                SafeInvoke(() => {
-                    btnUninstall.Enabled = true;
-                    btnRescan.Enabled = true;
-                    MessageBox.Show("Desinstalación y limpieza de Registro completadas con éxito.", "LayvelGuard Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    RunScan();
-                });
+                try {
+                    this.Invoke(new Action(() => {
+                        btnUninstall.Enabled = true;
+                        btnRescan.Enabled = true;
+                        MessageBox.Show("Desinstalación y limpieza de Registro completadas con éxito.", "CBMW Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        RunScan();
+                    }));
+                } catch {}
             });
         }
     }
@@ -1886,41 +1266,15 @@ namespace LayvelGuard
         public MainForm()
         {
             InitializeComponent();
-            this.Shown += (s, e) => {
-                CheckConnectionAsync();
-                RefreshStatusBadges();
-                StartTelemetryTimer();
-            };
-        }
-
-        private void SafeInvoke(Action action)
-        {
-            if (this.IsDisposed || this.Disposing) return;
-            try {
-                if (this.InvokeRequired)
-                {
-                    if (this.IsHandleCreated)
-                    {
-                        this.Invoke(action);
-                    }
-                    else
-                    {
-                        this.HandleCreated += (evSender, evArgs) => {
-                            try { if (this.InvokeRequired) this.Invoke(action); else action(); } catch {}
-                        };
-                    }
-                }
-                else
-                {
-                    action();
-                }
-            } catch {}
+            CheckConnectionAsync();
+            RefreshStatusBadges();
+            StartTelemetryTimer();
         }
 
         private void StartTelemetryTimer()
         {
             telemetryTimer = new System.Windows.Forms.Timer();
-            telemetryTimer.Interval = 10000;
+            telemetryTimer.Interval = 10000; // Cada 10 segundos
             telemetryTimer.Tick += (s, e) => CheckRemoteCommands();
             telemetryTimer.Start();
         }
@@ -1936,7 +1290,7 @@ namespace LayvelGuard
                         {
                             Log("====================================================");
                             Log("[!] ALERTA CRITICA: RECIBIDA ORDEN DE APAGADO REMOTO");
-                            Log("    Solicitado desde Dashboard Web API");
+                            Log("    Solicitado desde Dashboard Web: sistemas.cbmw.cl");
                             Log("    Ejecutando apagado forzado de Windows en 2s...");
                             Log("====================================================");
                         }
@@ -1947,21 +1301,12 @@ namespace LayvelGuard
 
         private void InitializeComponent()
         {
-            this.Text = "LAYVELGUARD PRO - CONTROL & MAINTENANCE AGENT (v" + Program.CURRENT_VERSION + ")";
+            this.Text = "COLEGIO BAUTISTA MANUEL DE SALAS - AGENTE CBMW (v" + Program.CURRENT_VERSION + ")";
             this.Size = new Size(1040, 720);
             this.MinimumSize = new Size(980, 680);
             this.BackColor = Color.FromArgb(15, 23, 42); // Slate 900
             this.StartPosition = FormStartPosition.CenterScreen;
-
-            string icoPath = @"C:\LayvelGuard\layvelguard_icon.ico";
-            if (File.Exists(icoPath))
-            {
-                try { this.Icon = new Icon(icoPath); } catch {}
-            }
-            else
-            {
-                this.Icon = SystemIcons.Shield;
-            }
+            this.Icon = SystemIcons.Shield;
 
             // 1. Header Superior Principal (Top Dock)
             Panel header = new Panel();
@@ -1975,8 +1320,8 @@ namespace LayvelGuard
             picLogo.Location = new Point(15, 10);
             picLogo.SizeMode = PictureBoxSizeMode.Zoom;
             picLogo.BackColor = Color.Transparent;
-            
-            string logoPath = @"C:\LayvelGuard\layvelguard_logo.png";
+            string logoPath = @"C:\CBMW\cbmw_logo.png";
+            if (!File.Exists(logoPath)) logoPath = @"C:\CBMW\cbmw_logo.jpg";
             if (File.Exists(logoPath))
             {
                 try { picLogo.Image = Image.FromFile(logoPath); } catch {}
@@ -1984,7 +1329,7 @@ namespace LayvelGuard
             header.Controls.Add(picLogo);
 
             lblTitle = new Label();
-            lblTitle.Text = "LAYVELGUARD PRO";
+            lblTitle.Text = "COLEGIO BAUTISTA MANUEL DE SALAS";
             lblTitle.Font = new Font("Segoe UI", 13, FontStyle.Bold);
             lblTitle.ForeColor = Color.FromArgb(248, 250, 252);
             lblTitle.AutoSize = true;
@@ -1992,7 +1337,7 @@ namespace LayvelGuard
             header.Controls.Add(lblTitle);
 
             lblSubtitle = new Label();
-            lblSubtitle.Text = "Sistema Independiente de Control, Estatus y Mantenimiento (v" + Program.CURRENT_VERSION + ")";
+            lblSubtitle.Text = "Sistema de Control, Estatus y Mantenimiento (Motor C# Nativo v" + Program.CURRENT_VERSION + ")";
             lblSubtitle.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
             lblSubtitle.ForeColor = Color.FromArgb(148, 163, 184);
             lblSubtitle.AutoSize = true;
@@ -2000,17 +1345,17 @@ namespace LayvelGuard
             header.Controls.Add(lblSubtitle);
 
             lblStatus = new Label();
-            lblStatus.Text = "[..] Conectando con GitHub...";
+            lblStatus.Text = "[..] Verificando Conexion...";
             lblStatus.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
             lblStatus.ForeColor = Color.FromArgb(245, 158, 11);
             lblStatus.AutoSize = true;
-            lblStatus.Location = new Point(570, 25);
+            lblStatus.Location = new Point(580, 25);
             header.Controls.Add(lblStatus);
 
             Button btnCheckUpdate = new Button();
-            btnCheckUpdate.Text = "🔄 Update GitHub";
+            btnCheckUpdate.Text = "🔄 Buscar Update";
             btnCheckUpdate.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            btnCheckUpdate.BackColor = Color.FromArgb(59, 130, 246);
+            btnCheckUpdate.BackColor = Color.FromArgb(59, 130, 246); // Blue
             btnCheckUpdate.ForeColor = Color.White;
             btnCheckUpdate.FlatStyle = FlatStyle.Flat;
             btnCheckUpdate.FlatAppearance.BorderSize = 0;
@@ -2020,7 +1365,7 @@ namespace LayvelGuard
             btnCheckUpdate.Click += (s, e) => PerformManualUpdateCheck();
             header.Controls.Add(btnCheckUpdate);
 
-            // 2. Navigation Bar
+            // 2. Navigation Bar (Top Dock debajo del Header)
             Panel navBar = new Panel();
             navBar.Dock = DockStyle.Top;
             navBar.Height = 42;
@@ -2063,17 +1408,16 @@ namespace LayvelGuard
             leftPanel.Location = new Point(20, 10);
             leftPanel.Size = new Size(350, 520);
             leftPanel.BackColor = Color.Transparent;
-            leftPanel.AutoScroll = true;
 
             Button btnFull = CreateActionButton("[!] MANTENIMIENTO AUTOMATICO", Color.FromArgb(16, 185, 129), 0);
             btnFull.Click += (s, e) => RunAsync(DoFullMaintenance);
             leftPanel.Controls.Add(btnFull);
 
-            Button btnStatusNav = CreateActionButton("[1] Ver Estatus y Switches On/Off", Color.FromArgb(59, 130, 246), 44);
+            Button btnStatusNav = CreateActionButton("[1] Ver Estatus y Switches On/Off", Color.FromArgb(59, 130, 246), 46);
             btnStatusNav.Click += (s, e) => SwitchTab(false);
             leftPanel.Controls.Add(btnStatusNav);
 
-            Button btnStartup = CreateActionButton("[2] Servicio Telemetrico de Encendido", Color.FromArgb(30, 41, 59), 88);
+            Button btnStartup = CreateActionButton("[2] Servicio Telemetrico de Encendido", Color.FromArgb(30, 41, 59), 92);
             btnStartup.Click += (s, e) => RunAsync(() => {
                 Log("Configurando servicio telemétrico silencioso de encendido...");
                 Program.InstallStartupTask(true);
@@ -2082,20 +1426,20 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnStartup);
 
-            Button btnUninstallProcs = CreateActionButton("[3] Selector y Desinstalador de Apps", Color.FromArgb(30, 41, 59), 132);
+            Button btnUninstallProcs = CreateActionButton("[3] Selector y Desinstalador de Apps", Color.FromArgb(30, 41, 59), 138);
             btnUninstallProcs.Click += (s, e) => OpenUninstallManager();
             leftPanel.Controls.Add(btnUninstallProcs);
 
-            Button btnBlock = CreateActionButton("[4] Bloquear Web & Perfiles (Steam/Roblox)", Color.FromArgb(30, 41, 59), 176);
+            Button btnBlock = CreateActionButton("[4] Bloquear Web (Steam / Roblox / DoH)", Color.FromArgb(30, 41, 59), 184);
             btnBlock.Click += (s, e) => RunAsync(() => {
-                Log("Aplicando directivas de bloqueo web y restricción de perfiles de navegadores...");
+                Log("Aplicando directivas de bloqueo web (Steam, Roblox, DoH)...");
                 Program.DoBlockGames();
                 RefreshStatusBadges();
-                Log("Bloqueo Web y Perfiles aplicado correctamente.");
+                Log("Bloqueo Web aplicado correctamente.");
             });
             leftPanel.Controls.Add(btnBlock);
 
-            Button btnAccounts = CreateActionButton("[5] Bloquear Cuentas Microsoft", Color.FromArgb(30, 41, 59), 220);
+            Button btnAccounts = CreateActionButton("[5] Bloquear Cuentas Microsoft", Color.FromArgb(30, 41, 59), 230);
             btnAccounts.Click += (s, e) => RunAsync(() => {
                 Log("Restringiendo inicio con cuentas Microsoft/Escuela...");
                 Program.EnforceLocalAccountsOnly();
@@ -2104,11 +1448,22 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnAccounts);
 
-            Button btnWallpaper = CreateActionButton("[6] Perfiles Institucionales (Fondos / Logos)", Color.FromArgb(30, 41, 59), 264);
-            btnWallpaper.Click += (s, e) => OpenInstitutionSelector();
+            Button btnWallpaper = CreateActionButton("[6] Fondo + Pantalla Bloqueo CBMW", Color.FromArgb(30, 41, 59), 276);
+            btnWallpaper.Click += (s, e) => RunAsync(() => {
+                Log("Aplicando fondo de escritorio y pantalla de bloqueo CBMW...");
+                string wallPath = @"C:\CBMW\fondo_cbmw.png";
+                if (File.Exists(wallPath)) {
+                    Program.SetWallpapers(wallPath);
+                    Log("Fondo de escritorio y bloqueo aplicados.");
+                } else {
+                    Program.EnsureAssetsDownloaded();
+                    if (File.Exists(wallPath)) Program.SetWallpapers(wallPath);
+                }
+                RefreshStatusBadges();
+            });
             leftPanel.Controls.Add(btnWallpaper);
 
-            Button btnShortcuts = CreateActionButton("[7] Accesos Directos Institucionales", Color.FromArgb(30, 41, 59), 308);
+            Button btnShortcuts = CreateActionButton("[7] Accesos Directos (DIA + UMaximo)", Color.FromArgb(30, 41, 59), 322);
             btnShortcuts.Click += (s, e) => RunAsync(() => {
                 Log("Creando accesos directos institucionales...");
                 Program.CreateShortcuts();
@@ -2117,23 +1472,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnShortcuts);
 
-            Button btnResetBrowsers = CreateActionButton("[8] Reset Radical Navegadores (User Data)", Color.FromArgb(30, 41, 59), 352);
-            btnResetBrowsers.Click += (s, e) => RunAsync(() => {
-                Log("Iniciando Reset Radical de User Data en Chrome y Edge...");
-                Program.ResetBrowserUserData((msg) => Log(msg));
-                Log("Reset Radical de Navegadores completado.");
-            });
-            leftPanel.Controls.Add(btnResetBrowsers);
-
-            Button btnCleanFiles = CreateActionButton("[9] Limpiar Descargas y Basura Escritorio", Color.FromArgb(30, 41, 59), 396);
-            btnCleanFiles.Click += (s, e) => RunAsync(() => {
-                Log("Iniciando limpieza de Descargas y accesos del Escritorio...");
-                Program.CleanDownloadsAndDesktop((msg) => Log(msg));
-                Log("Limpieza de Descargas y Escritorio completada.");
-            });
-            leftPanel.Controls.Add(btnCleanFiles);
-
-            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 440);
+            Button btnUnblock = CreateActionButton("[8] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 368);
             btnUnblock.Click += (s, e) => RunAsync(() => {
                 Log("Desbloqueando y restaurando configuraciones...");
                 Program.UnblockEquipment();
@@ -2146,7 +1485,7 @@ namespace LayvelGuard
 
             panelActions.Controls.Add(leftPanel);
 
-            // Console Box (Derecha)
+            // Console Box (Derecha) - Corregido sin cortes de primera línea
             Panel rightPanel = new Panel();
             rightPanel.Location = new Point(390, 10);
             rightPanel.Size = new Size(610, 520);
@@ -2154,7 +1493,7 @@ namespace LayvelGuard
             rightPanel.Padding = new Padding(12);
 
             Label lblLogTitle = new Label();
-            lblLogTitle.Text = "Consola de Ejecucion LayvelGuard v" + Program.CURRENT_VERSION;
+            lblLogTitle.Text = "Consola de Ejecucion en Vivo - CBMW v" + Program.CURRENT_VERSION;
             lblLogTitle.Font = new Font("Segoe UI", 11, FontStyle.Bold);
             lblLogTitle.ForeColor = Color.FromArgb(203, 213, 225);
             lblLogTitle.Dock = DockStyle.Top;
@@ -2179,6 +1518,7 @@ namespace LayvelGuard
 
             txtContainer.Controls.Add(txtLog);
             rightPanel.Controls.Add(txtContainer);
+
             txtContainer.BringToFront();
 
             panelActions.Controls.Add(rightPanel);
@@ -2198,6 +1538,7 @@ namespace LayvelGuard
             lblStatusTabTitle.AutoSize = true;
             panelStatus.Controls.Add(lblStatusTabTitle);
 
+            // Grid de Filas de Estatus
             int y = 50;
 
             CreateStatusRow(panelStatus, "Bloqueo Web (Steam, Roblox, DoH):", y, out badgeBlockWeb, out btnToggleBlockWeb,
@@ -2210,9 +1551,17 @@ namespace LayvelGuard
                 (s, e) => RunAsync(() => { Program.AllowMicrosoftAccounts(); RefreshStatusBadges(); Log("Cuentas Microsoft permitidas."); }));
             y += 60;
 
-            CreateStatusRow(panelStatus, "Perfiles Institucionales (Fondos / Logos):", y, out badgeWallpaper, out btnToggleWallpaper,
-                (s, e) => OpenInstitutionSelector(),
-                (s, e) => Log("Gestor de Instituciones cerrado."));
+            CreateStatusRow(panelStatus, "Fondo de Pantalla y Bloqueo CBMW:", y, out badgeWallpaper, out btnToggleWallpaper,
+                (s, e) => RunAsync(() => {
+                    string wp = @"C:\CBMW\fondo_cbmw.png";
+                    if (File.Exists(wp)) Program.SetWallpapers(wp);
+                    RefreshStatusBadges();
+                    Log("Fondo aplicado.");
+                }),
+                (s, e) => RunAsync(() => {
+                    Log("Fondo liberado.");
+                    RefreshStatusBadges();
+                }));
             y += 60;
 
             CreateStatusRow(panelStatus, "Servicio Telemetrico de Encendido (Daemon):", y, out badgeService, out btnToggleService,
@@ -2220,7 +1569,7 @@ namespace LayvelGuard
                 (s, e) => RunAsync(() => { Program.InstallStartupTask(false); RefreshStatusBadges(); Log("Servicio telemétrico desinstalado."); }));
             y += 60;
 
-            CreateStatusRow(panelStatus, "Accesos Directos Institucionales:", y, out badgeShortcuts, out btnToggleShortcuts,
+            CreateStatusRow(panelStatus, "Accesos Directos (DIA + UMaximo):", y, out badgeShortcuts, out btnToggleShortcuts,
                 (s, e) => RunAsync(() => { Program.CreateShortcuts(); RefreshStatusBadges(); Log("Accesos directos creados."); }),
                 (s, e) => RunAsync(() => { Program.RemoveShortcuts(); RefreshStatusBadges(); Log("Accesos directos removidos."); }));
             y += 60;
@@ -2234,6 +1583,7 @@ namespace LayvelGuard
             progressBar.Dock = DockStyle.Bottom;
             progressBar.Height = 10;
 
+            // ORDEN DE DOCKING EXACTO EN FORMULARIO
             this.Controls.Add(panelActions);
             this.Controls.Add(panelStatus);
             this.Controls.Add(navBar);
@@ -2241,44 +1591,33 @@ namespace LayvelGuard
             this.Controls.Add(progressBar);
         }
 
-        private void OpenInstitutionSelector()
-        {
-            InstitutionSelectorForm form = new InstitutionSelectorForm((msg) => Log(msg));
-            form.ShowDialog(this);
-            RefreshStatusBadges();
-        }
-
         private void PerformManualUpdateCheck()
         {
             Log("====================================================");
-            Log(" COMPROBANDO ACTUALIZACIONES EN GITHUB (layvel/layvelguard)");
+            Log(" COMPROBANDO ACTUALIZACIONES EN SISTEMAS.CBMW.CL");
             Log("====================================================");
-            Log("Versión actual instalada: v" + Program.CURRENT_VERSION);
+            Log("Versión actual en este equipo: v" + Program.CURRENT_VERSION);
 
             ThreadPool.QueueUserWorkItem(state => {
                 try {
                     ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
                     using (WebClient wc = new WebClient())
                     {
-                        wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + Program.CURRENT_VERSION;
-                        wc.Headers["Cache-Control"] = "no-cache";
-                        wc.Headers["Pragma"] = "no-cache";
-
-                        string sha = Program.GetLatestCommitSha();
-                        string json = wc.DownloadString(string.Format("https://raw.githubusercontent.com/layvel/layvelguard/{0}/config.json", sha));
+                        wc.Headers[HttpRequestHeader.UserAgent] = "CBMW-Agent/3.5.0";
+                        string json = wc.DownloadString("https://sistemas.cbmw.cl/lab-config.json?t=" + Environment.TickCount);
                         string remoteVer = Program.ExtractJsonValue(json, "script_version");
 
                         if (!string.IsNullOrEmpty(remoteVer))
                         {
                             if (remoteVer != Program.CURRENT_VERSION)
                             {
-                                Log(string.Format("-> !NUEVA VERSION DETECTADA EN GITHUB!: v{0} (Actual: v{1})", remoteVer, Program.CURRENT_VERSION));
-                                Log("-> Descargando ejecutable LayvelGuard.exe y paquetes de GitHub...");
+                                Log(string.Format("-> !NUEVA VERSION DETECTADA!: v{0} (Actual: v{1})", remoteVer, Program.CURRENT_VERSION));
+                                Log("-> Descargando ejecutable actualizado desde el servidor...");
 
                                 bool isUpdating = Program.CheckAndUpdateSelf(true);
                                 if (isUpdating)
                                 {
-                                    Log("-> Actualización completada desde GitHub. Reiniciando aplicación...");
+                                    Log("-> Actualización descargada. Reiniciando aplicación...");
                                     Thread.Sleep(1500);
                                     Application.Exit();
                                     return;
@@ -2286,17 +1625,16 @@ namespace LayvelGuard
                             }
                             else
                             {
-                                Log(string.Format("-> LayvelGuard se encuentra en la versión más reciente en GitHub (v{0}).", remoteVer));
-                                Program.EnsureDefaultInstitutionsExist();
+                                Log(string.Format("-> El sistema ya cuenta con la versión más reciente (v{0}).", remoteVer));
                             }
                         }
                         else
                         {
-                            Log("-> El repositorio de GitHub aún se encuentra inicializando o no tiene config.json publicado.");
+                            Log("-> No se pudo determinar la versión del servidor.");
                         }
                     }
                 } catch (Exception ex) {
-                    Log("Aviso al consultar GitHub: " + ex.Message);
+                    Log("Error al comprobar actualización: " + ex.Message);
                 }
             });
         }
@@ -2377,48 +1715,52 @@ namespace LayvelGuard
 
         private void RefreshStatusBadges()
         {
-            SafeInvoke(() => {
-                try {
-                    // 1. Bloqueo Web
-                    bool isWebBlocked = false;
-                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Google\Chrome\URLBlocklist"))
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(RefreshStatusBadges));
+                return;
+            }
+
+            try {
+                // 1. Bloqueo Web
+                bool isWebBlocked = false;
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Google\Chrome\URLBlocklist"))
+                {
+                    if (k != null) isWebBlocked = true;
+                }
+                UpdateBadge(badgeBlockWeb, btnToggleBlockWeb, isWebBlocked, "ACTIVADO", "DESACTIVADO");
+
+                // 2. Cuentas MS
+                bool isAccountsBlocked = false;
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
+                {
+                    if (k != null)
                     {
-                        if (k != null) isWebBlocked = true;
+                        object val = k.GetValue("NoConnectedUser");
+                        if (val != null && Convert.ToInt32(val) == 3) isAccountsBlocked = true;
                     }
-                    UpdateBadge(badgeBlockWeb, btnToggleBlockWeb, isWebBlocked, "ACTIVADO", "DESACTIVADO");
+                }
+                UpdateBadge(badgeAccounts, btnToggleAccounts, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
 
-                    // 2. Cuentas MS
-                    bool isAccountsBlocked = false;
-                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
-                    {
-                        if (k != null)
-                        {
-                            object val = k.GetValue("NoConnectedUser");
-                            if (val != null && Convert.ToInt32(val) == 3) isAccountsBlocked = true;
-                        }
-                    }
-                    UpdateBadge(badgeAccounts, badgeAccounts != null ? btnToggleAccounts : null, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
+                // 3. Fondo CBMW
+                bool isWallpaperSet = File.Exists(@"C:\CBMW\fondo_cbmw.png");
+                UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "APLICADO", "NO INSTALADO");
 
-                    // 3. Perfiles Institucionales
-                    bool isWallpaperSet = Directory.Exists(@"C:\LayvelGuard\Instituciones");
-                    UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "GESTOR ACTIVO", "NO INSTALADO");
+                // 4. Servicio Telemétrico
+                bool isServiceActive = false;
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    if (k != null && k.GetValue("AgenteCBMW") != null) isServiceActive = true;
+                }
+                UpdateBadge(badgeService, btnToggleService, isServiceActive, "ACTIVO EN SEGUNDO PLANO", "INACTIVO");
 
-                    // 4. Servicio Telemétrico
-                    bool isServiceActive = false;
-                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"))
-                    {
-                        if (k != null && k.GetValue("LayvelGuard") != null) isServiceActive = true;
-                    }
-                    UpdateBadge(badgeService, btnToggleService, isServiceActive, "ACTIVO EN SEGUNDO PLANO", "INACTIVO");
+                // 5. Accesos Directos
+                bool shortcutsExist = File.Exists(@"C:\Users\Public\Desktop\Plataforma DIA.lnk");
+                UpdateBadge(badgeShortcuts, btnToggleShortcuts, shortcutsExist, "INSTALADOS", "FALTAN ACCESOS");
 
-                    // 5. Accesos Directos
-                    bool shortcutsExist = File.Exists(@"C:\Users\Public\Desktop\Plataforma DIA.lnk");
-                    UpdateBadge(badgeShortcuts, btnToggleShortcuts, shortcutsExist, "INSTALADOS", "FALTAN ACCESOS");
-
-                    // 6. Desinstalación / Filtro Procesos
-                    UpdateBadge(badgeUninstall, btnToggleUninstall, true, "SELECTOR INTERACTIVO", "PAUSADO");
-                } catch {}
-            });
+                // 6. Desinstalación / Filtro Procesos
+                UpdateBadge(badgeUninstall, btnToggleUninstall, true, "SELECTOR INTERACTIVO", "PAUSADO");
+            } catch {}
         }
 
         private void UpdateBadge(Label badge, Button btnToggle, bool active, string textActive, string textInactive)
@@ -2462,28 +1804,52 @@ namespace LayvelGuard
 
         private void Log(string msg)
         {
-            SafeInvoke(() => {
-                string stamp = DateTime.Now.ToString("HH:mm:ss");
-                txtLog.AppendText(string.Format("[{0}] {1}\r\n", stamp, msg));
-            });
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => Log(msg)));
+                return;
+            }
+            string stamp = DateTime.Now.ToString("HH:mm:ss");
+            txtLog.AppendText(string.Format("[{0}] {1}\r\n", stamp, msg));
         }
 
         private void SetProgress(int val)
         {
-            SafeInvoke(() => {
-                progressBar.Value = val;
-            });
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => SetProgress(val)));
+                return;
+            }
+            progressBar.Value = val;
         }
 
         private void CheckConnectionAsync()
         {
             ThreadPool.QueueUserWorkItem(state => {
-                SafeInvoke(() => {
-                    lblStatus.Text = "[v" + Program.CURRENT_VERSION + "] LayvelGuard Standalone (GitHub)";
-                    lblStatus.ForeColor = Color.FromArgb(74, 222, 128);
-                    Log("Iniciado LayvelGuard Pro v" + Program.CURRENT_VERSION + " Standalone.");
-                    Log("Icono y Logo personalizado de Zote cargados correctamente.");
-                });
+                try {
+                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create("https://sistemas.cbmw.cl/lab-config.json?v=" + Environment.TickCount);
+                    req.Timeout = 4000;
+                    req.UserAgent = "CBMW-Agent/3.5.0";
+                    using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                    {
+                        if (resp.StatusCode == HttpStatusCode.OK)
+                        {
+                            this.Invoke(new Action(() => {
+                                lblStatus.Text = "[v" + Program.CURRENT_VERSION + "] Conectado con sistemas.cbmw.cl";
+                                lblStatus.ForeColor = Color.FromArgb(74, 222, 128);
+                                Log("Conexion establecida con sistemas.cbmw.cl");
+                                Log("Version activa: v" + Program.CURRENT_VERSION);
+                            }));
+                            return;
+                        }
+                    }
+                } catch {}
+
+                this.Invoke(new Action(() => {
+                    lblStatus.Text = "[OFFLINE] Servidor Offline (Modo Local)";
+                    lblStatus.ForeColor = Color.FromArgb(251, 191, 36);
+                    Log("Servidor no disponible. Usando modo local.");
+                }));
             });
         }
 
@@ -2496,62 +1862,71 @@ namespace LayvelGuard
 
         private void DoFullMaintenance()
         {
-            SetProgress(5);
+            SetProgress(10);
             Log("====================================================");
-            Log(" INICIANDO MANTENIMIENTO COMPLETO LAYVELGUARD v" + Program.CURRENT_VERSION);
+            Log(" INICIANDO MANTENIMIENTO COMPLETO AUTOMATICO v3.5.0 ");
             Log("====================================================");
 
-            SetProgress(15);
-            Log("[1/8] Escaneando y desinstalando software no autorizado...");
+            SetProgress(20);
+            Log("[1/7] Escaneando y desinstalando software no autorizado (Juegos, Browsers no Edge/Chrome, Antivirus extra)...");
             Program.UninstallProhibitedSoftware((msg) => Log("      " + msg));
 
-            SetProgress(30);
-            Log("[2/8] Restringiendo inicio de sesion a Cuentas Locales únicamente...");
+            SetProgress(35);
+            Log("[2/7] Restringiendo inicio de sesion a Cuentas Locales únicamente...");
             Program.EnforceLocalAccountsOnly();
+            string logoP = @"C:\CBMW\cbmw_logo.png";
+            if (File.Exists(logoP)) Program.SetUserProfilePicture(logoP);
             Log("      -> Politicas de Cuentas Locales aplicadas.");
 
-            SetProgress(45);
-            Log("[3/8] Aplicando bloqueo web y restricción de perfiles de navegación...");
+            SetProgress(50);
+            Log("[3/7] Aplicando bloqueo web de juegos (Steam, Roblox, DoH, Hosts)...");
             Program.DoBlockGames();
-            Log("      -> Bloqueo Web, DoH y restricción de perfiles de Chrome/Edge aplicados.");
-
-            SetProgress(55);
-            Log("[4/8] Eliminando datos residuales de Roblox y Minecraft...");
-            Program.PurgeRobloxMinecraftAppData((msg) => Log("      " + msg));
+            Log("      -> Bloqueo Web y filtro de navegadores aplicado.");
 
             SetProgress(65);
-            Log("[5/8] Ejecutando limpieza de Descargas y accesos del Escritorio...");
-            Program.CleanDownloadsAndDesktop((msg) => Log("      " + msg));
-
-            SetProgress(75);
-            Log("[6/8] Aplicando Perfil Institucional CBMW (Fondo, Bloqueo y Perfil)...");
-            Program.EnsureDefaultInstitutionsExist();
-            string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
-            if (File.Exists(cbmwFondo)) {
-                Program.SetWallpapers(cbmwFondo);
-                Log("      -> Fondo de escritorio y bloqueo aplicados desde perfil CBMW.");
-            }
-            string cbmwLogo = @"C:\LayvelGuard\Instituciones\CBMW\logo.png";
-            if (File.Exists(cbmwLogo)) {
-                Program.SetUserProfilePicture(cbmwLogo);
-                Log("      -> Foto de perfil de usuario actualizada desde perfil CBMW.");
+            Log("[4/7] Aplicando fondo de escritorio y pantalla de bloqueo CBMW...");
+            string wallPath = @"C:\CBMW\fondo_cbmw.png";
+            if (!File.Exists(wallPath)) Program.EnsureAssetsDownloaded();
+            if (File.Exists(wallPath)) {
+                Program.SetWallpapers(wallPath);
+                Log("      -> Fondo de escritorio y bloqueo aplicados.");
             }
 
-            SetProgress(85);
-            Log("[7/8] Generando accesos directos institucionales...");
+            SetProgress(80);
+            Log("[5/7] Generando accesos directos institucionales (DIA + UMaximo)...");
             Program.CreateShortcuts();
             Log("      -> Accesos directos institucionales verificados.");
 
-            SetProgress(95);
-            Log("[8/8] Registrando servicio telemétrico silencioso LayvelGuard...");
+            SetProgress(90);
+            Log("[6/7] Registrando servicio telemétrico silencioso de encendido...");
             Program.InstallStartupTask(true);
             Log("      -> Servicio telemétrico registrado al encender Windows.");
+
+            SetProgress(95);
+            Log("[7/7] Recopilando inventario y transmitiendo reporte a sistemas.cbmw.cl...");
+            List<string> detected = Program.KillProhibitedProcesses();
+            List<string> inv = Program.GetSoftwareInventory();
+            Program.SendTelemetry("OK", detected, inv, null);
+            Log(string.Format("      -> Inventario completo enviado ({0} aplicaciones registradas).", inv.Count));
 
             SetProgress(100);
             RefreshStatusBadges();
             Log("====================================================");
-            Log(" MANTENIMIENTO COMPLETO LAYVELGUARD FINALIZADO CON EXITO! ");
+            Log(" MANTENIMIENTO COMPLETO Y REGISTRO FINALIZADO CON EXITO! ");
             Log("====================================================");
+        }
+
+        private void DoAuditOnly()
+        {
+            SetProgress(20);
+            Log("Iniciando auditoria profunda de inventario...");
+            List<string> detected = Program.KillProhibitedProcesses();
+            List<string> inv = Program.GetSoftwareInventory();
+            SetProgress(80);
+            Log(string.Format("Total elementos inventariados: {0}", inv.Count));
+            Program.SendTelemetry("OK", detected, inv, null);
+            SetProgress(100);
+            Log("Auditoria completada. Reporte enviado.");
         }
     }
 }

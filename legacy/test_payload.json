@@ -1,0 +1,16 @@
+{
+  "hostname": "LAB-PC01",
+  "username": "Profesor",
+  "ip": "192.168.1.50",
+  "os": "Windows 11 Pro",
+  "status": "OK",
+  "detected_apps": [],
+  "full_inventory": [
+    "Google Chrome",
+    "Microsoft Edge",
+    "Visual Studio Code",
+    "Office 365",
+    "[Proceso] chrome"
+  ],
+  "timestamp": "2026-08-19 15:55:00"
+}

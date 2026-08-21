@@ -1,0 +1,24 @@
+====================================================
+LOG DE EJECUCION DEL LABORATORIO - 08/12/2026 15:28:23
+[15:28:23] ====================================================
+[15:28:23]  CONFIGURANDO SEGURIDAD Y FONDO (SISTEMA COMPLETO)  
+[15:28:23] ====================================================
+[15:28:23] 
+[15:28:23] Carpeta detectada: C:\Users\Profesor2\Downloads\lab
+[15:28:23] Buscando imagen en: c:\Users\Profesor2\Downloads\lab\fondo pc.png
+[15:28:23] [1/6] Copiando imagen a carpeta publica segura...
+[15:28:23] Imagen lista en: C:\Users\Public\Pictures\LabWallpaper\LabFondo.png
+[15:28:23] [2/6] Configurando Registro de Windows (HKLM y HKCU)...
+[15:28:23] [3/6] Aplicando directivas para bloquear cuentas de Google en Chrome y Edge...
+[15:28:23] [4/6] Reemplazando cache de fondo TranscodedWallpaper de Windows...
+[15:28:23] [5/6] Actualizando directivas de grupo (gpupdate)...
+[15:28:34] [6/6] Reiniciando Windows Explorer para actualizar pantalla...
+[15:28:36] 
+[15:28:36] ====================================================
+[15:28:36]  ??BLOQUEO Y CONFIGURACION APLICADOS CON EXITO!      
+[15:28:36] ====================================================
+[15:28:36] - Fondo cambiado y bloqueado correctamente.
+[15:28:36] - Inicio de sesion en Google Chrome desactivado.
+[15:28:36] Revisa el archivo 'lab_log.txt' en el USB para ver el reporte.
+[15:28:36] 
+[15:28:36] Presiona la tecla ENTER para cerrar esta ventana...

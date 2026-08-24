@@ -1005,8 +1005,8 @@ namespace LayvelGuard
                 "firefox", "opera", "operagx", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
                 // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
                 "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
-                // Mensajería y Control Remoto No Autorizado
-                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec"
+                // Mensajería, Control Remoto y Apps de Fondo No Autorizadas
+                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec", "lively", "wallpaper engine", "rainmeter", "deskscapes", "bing wallpaper"
             };
 
             List<string> customRules = LoadCustomProhibitedRules();
@@ -1218,7 +1218,8 @@ namespace LayvelGuard
                 "firefox", "opera", "operagx", "brave", "vivaldi", "tor", "yandex", "ucbrowser",
                 "AvastUI", "AVGUI", "ccleaner", "mcshield", "bdagent",
                 "HD-Player", "bluestacks", "dnplayer", "Nox", "MEmu", "CheatEngine", "StumbleGuys", "TLauncher",
-                "Discord", "Telegram", "WhatsApp", "AnyDesk", "TeamViewer", "Parsec"
+                "Discord", "Telegram", "WhatsApp", "AnyDesk", "TeamViewer", "Parsec",
+                "Lively", "LivelyUI", "livelywp", "wallpaper32", "wallpaper64", "wallpaper", "Rainmeter", "DeskScapes", "BingWallpaperApp"
             };
 
             foreach (string cr in LoadCustomProhibitedRules())
@@ -1286,6 +1287,92 @@ namespace LayvelGuard
                 if (File.Exists(diaLnk)) File.Delete(diaLnk);
                 if (File.Exists(umaxLnk)) File.Delete(umaxLnk);
             } catch {}
+        }
+
+        public const int SPI_SETDESKWALLPAPER = 20;
+        public const int SPIF_UPDATEINIFILE = 0x01;
+        public const int SPIF_SENDCHANGE = 0x02;
+
+        public static void EnforceInstitutionalWallpaper(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("Aplicando bloqueo rígido de Fondo de Pantalla contra aplicaciones externas...");
+
+                // 1. Políticas en Registro ActiveDesktop & System (Bloquea menú contextual y configuración)
+                using (RegistryKey actPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
+                {
+                    if (actPolicy != null)
+                    {
+                        actPolicy.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
+                    }
+                }
+
+                using (RegistryKey actPolicyHklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
+                {
+                    if (actPolicyHklm != null)
+                    {
+                        actPolicyHklm.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
+                    }
+                }
+
+                using (RegistryKey sysPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
+                {
+                    if (sysPolicy != null)
+                    {
+                        sysPolicy.SetValue("NoDispBackgroundPage", 1, RegistryValueKind.DWord);
+                    }
+                }
+
+                using (RegistryKey expPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"))
+                {
+                    if (expPolicy != null)
+                    {
+                        expPolicy.SetValue("NoActiveDesktopChanges", 1, RegistryValueKind.DWord);
+                        expPolicy.SetValue("NoActiveDesktop", 1, RegistryValueKind.DWord);
+                    }
+                }
+
+                // 2. Determinar ruta de imagen de fondo institucional o por defecto
+                string bgPath = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
+                if (!File.Exists(bgPath)) bgPath = @"C:\LayvelGuard\Instituciones\CBMW\fondo.jpg";
+                if (!File.Exists(bgPath))
+                {
+                    try {
+                        if (Directory.Exists(@"C:\LayvelGuard\Instituciones"))
+                        {
+                            foreach (string sub in Directory.GetDirectories(@"C:\LayvelGuard\Instituciones"))
+                            {
+                                string png = Path.Combine(sub, "fondo.png");
+                                string jpg = Path.Combine(sub, "fondo.jpg");
+                                if (File.Exists(png)) { bgPath = png; break; }
+                                if (File.Exists(jpg)) { bgPath = jpg; break; }
+                            }
+                        }
+                    } catch {}
+                }
+
+                if (File.Exists(bgPath))
+                {
+                    using (RegistryKey sysPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
+                    {
+                        if (sysPolicy != null)
+                        {
+                            sysPolicy.SetValue("Wallpaper", bgPath, RegistryValueKind.String);
+                            sysPolicy.SetValue("WallpaperStyle", "2", RegistryValueKind.String);
+                        }
+                    }
+
+                    // Forzar notificación a explorer.exe en vivo
+                    SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, bgPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                    if (logger != null) logger("   -> Fondo institucional aplicado y bloqueado en Registro: " + Path.GetFileName(bgPath));
+                }
+                else
+                {
+                    if (logger != null) logger("   -> Políticas de bloqueo de fondo aplicadas (sin imagen personalizada en C:\\LayvelGuard).");
+                }
+            } catch (Exception ex) {
+                if (logger != null) logger("Aviso en bloqueo de fondo: " + ex.Message);
+            }
         }
 
         private static void CreateLnk(string lnkPath, string target, string args)
@@ -2862,18 +2949,9 @@ namespace LayvelGuard
             Program.CleanDownloadsAndDesktop((msg) => Log("      " + msg));
 
             SetProgress(75);
-            Log("[6/8] Aplicando Perfil Institucional CBMW (Fondo, Bloqueo y Perfil)...");
+            Log("[6/8] Aplicando bloqueo rígido de Fondo de Pantalla y Perfil Institucional...");
             Program.EnsureDefaultInstitutionsExist();
-            string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
-            if (File.Exists(cbmwFondo)) {
-                Program.SetWallpapers(cbmwFondo);
-                Log("      -> Fondo de escritorio y bloqueo aplicados desde perfil CBMW.");
-            }
-            string cbmwLogo = @"C:\LayvelGuard\Instituciones\CBMW\logo.png";
-            if (File.Exists(cbmwLogo)) {
-                Program.SetUserProfilePicture(cbmwLogo);
-                Log("      -> Foto de perfil de usuario actualizada desde perfil CBMW.");
-            }
+            Program.EnforceInstitutionalWallpaper((msg) => Log("      " + msg));
 
             SetProgress(85);
             Log("[7/8] Generando accesos directos institucionales...");

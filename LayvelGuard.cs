@@ -22,7 +22,7 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.3.0";
+        public const string CURRENT_VERSION = "1.4.0";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
         public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
@@ -31,6 +31,55 @@ namespace LayvelGuard
         // GitHub Repository Central URLs
         private const string GITHUB_REPO_API = "https://api.github.com/repos/layvel/layvelguard/commits/main";
         private const string LOG_FILE = @"C:\LayvelGuard\layvelguard.log";
+        public const string CUSTOM_PROHIBITED_FILE = @"C:\LayvelGuard\custom_prohibited.json";
+
+        public static List<string> LoadCustomProhibitedRules()
+        {
+            List<string> custom = new List<string>();
+            try {
+                if (File.Exists(CUSTOM_PROHIBITED_FILE))
+                {
+                    string json = File.ReadAllText(CUSTOM_PROHIBITED_FILE);
+                    int startBracket = json.IndexOf('[');
+                    int endBracket = json.LastIndexOf(']');
+                    if (startBracket != -1 && endBracket > startBracket)
+                    {
+                        string itemsStr = json.Substring(startBracket + 1, endBracket - startBracket - 1);
+                        string[] items = itemsStr.Split(new char[] { ',', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (string item in items)
+                        {
+                            string clean = item.Replace("\"", "").Replace("'", "").Trim();
+                            if (!string.IsNullOrWhiteSpace(clean) && !custom.Contains(clean.ToLower()))
+                            {
+                                custom.Add(clean.ToLower());
+                            }
+                        }
+                    }
+                }
+            } catch {}
+            return custom;
+        }
+
+        public static void SaveCustomProhibitedRule(string rule)
+        {
+            if (string.IsNullOrWhiteSpace(rule)) return;
+            try {
+                List<string> existing = LoadCustomProhibitedRules();
+                string cleanRule = rule.Trim().ToLower();
+                if (!existing.Contains(cleanRule))
+                {
+                    existing.Add(cleanRule);
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine("[");
+                    for (int i = 0; i < existing.Count; i++)
+                    {
+                        sb.AppendFormat("  \"{0}\"{1}\r\n", existing[i], (i < existing.Count - 1) ? "," : "");
+                    }
+                    sb.AppendLine("]");
+                    File.WriteAllText(CUSTOM_PROHIBITED_FILE, sb.ToString(), Encoding.UTF8);
+                }
+            } catch {}
+        }
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -524,7 +573,7 @@ namespace LayvelGuard
             } catch {}
         }
 
-        public static void EnforceLocalAccountsOnly()
+        public static void EnforceLocalAccountsOnly(Action<string> logger = null)
         {
             try {
                 using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
@@ -534,7 +583,160 @@ namespace LayvelGuard
                         key.SetValue("NoConnectedUser", 3, RegistryValueKind.DWord);
                     }
                 }
+                PurgeConnectedAccountsAndIdentities(logger);
             } catch {}
+        }
+
+        public static void PurgeConnectedAccountsAndIdentities(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("Iniciando purga radical de cuentas de correo y tokens vinculados...");
+
+                // 1. Limpieza de Identidades MSA / AzureAD en Registro de Windows
+                if (logger != null) logger("   - Eliminando identidades registradas en el Registro de Windows (IdentityCRL / AccountSettings)...");
+                try {
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL", true))
+                    {
+                        if (key != null)
+                        {
+                            try { key.DeleteSubKeyTree("UserExtendedProperties"); } catch {}
+                            try { key.DeleteSubKeyTree("Identities"); } catch {}
+                        }
+                    }
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\AccountSettings", true))
+                    {
+                        if (key != null)
+                        {
+                            try { key.DeleteSubKeyTree("Accounts"); } catch {}
+                        }
+                    }
+                    using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\IdentityCRL", true))
+                    {
+                        if (key != null)
+                        {
+                            try { key.DeleteSubKeyTree("UserExtendedProperties"); } catch {}
+                            try { key.DeleteSubKeyTree("Identities"); } catch {}
+                        }
+                    }
+                } catch {}
+
+                // 2. Limpieza de TokenBroker & BrokerPlugin en C:\Users\*
+                if (logger != null) logger("   - Purgando cachés de TokenBroker y BrokerPlugin en todos los perfiles de usuario...");
+                try {
+                    string systemDrive = Path.GetPathRoot(Environment.SystemDirectory);
+                    string usersDir = Path.Combine(systemDrive, "Users");
+                    if (Directory.Exists(usersDir))
+                    {
+                        foreach (string userFolder in Directory.GetDirectories(usersDir))
+                        {
+                            string uName = Path.GetFileName(userFolder);
+                            if (uName.Equals("Public", StringComparison.OrdinalIgnoreCase) || uName.Equals("Default", StringComparison.OrdinalIgnoreCase) || uName.Equals("All Users", StringComparison.OrdinalIgnoreCase)) continue;
+
+                            string tokenCache = Path.Combine(userFolder, @"AppData\Local\Microsoft\TokenBroker\Cache");
+                            if (Directory.Exists(tokenCache))
+                            {
+                                try {
+                                    Directory.Delete(tokenCache, true);
+                                    if (logger != null) logger("     * TokenBroker limpiado en: " + uName);
+                                } catch {}
+                            }
+
+                            string packagesDir = Path.Combine(userFolder, @"AppData\Local\Packages");
+                            if (Directory.Exists(packagesDir))
+                            {
+                                try {
+                                    foreach (string pkgDir in Directory.GetDirectories(packagesDir, "Microsoft.AAD.BrokerPlugin_*"))
+                                    {
+                                        try { Directory.Delete(pkgDir, true); } catch {}
+                                    }
+                                } catch {}
+                            }
+                        }
+                    }
+                } catch {}
+
+                // 3. Purga de Credenciales de Windows Vault / Cmdkey
+                if (logger != null) logger("   - Escaneando y purgando credenciales guardadas en Windows Credential Manager...");
+                try {
+                    ProcessStartInfo psi = new ProcessStartInfo("cmdkey", "/list");
+                    psi.CreateNoWindow = true;
+                    psi.UseShellExecute = false;
+                    psi.RedirectStandardOutput = true;
+                    Process p = Process.Start(psi);
+                    if (p != null)
+                    {
+                        string output = p.StandardOutput.ReadToEnd();
+                        p.WaitForExit();
+
+                        string[] lines = output.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (string line in lines)
+                        {
+                            if (line.Contains("Target:") || line.Contains("Destino:"))
+                            {
+                                int idx = line.IndexOf(':');
+                                if (idx != -1)
+                                {
+                                    string target = line.Substring(idx + 1).Trim();
+                                    if (target.Contains("@") || target.StartsWith("MicrosoftAccount:", StringComparison.OrdinalIgnoreCase) || target.StartsWith("WindowsLive:", StringComparison.OrdinalIgnoreCase) || target.Contains("SSO"))
+                                    {
+                                        try {
+                                            ProcessStartInfo delPsi = new ProcessStartInfo("cmdkey", "/delete:\"" + target + "\"");
+                                            delPsi.CreateNoWindow = true;
+                                            delPsi.UseShellExecute = false;
+                                            Process delP = Process.Start(delPsi);
+                                            if (delP != null) delP.WaitForExit();
+                                            if (logger != null) logger("     * Credencial desvinculada: " + target);
+                                        } catch {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch {}
+
+                // 4. Desactivación de cuentas locales creadas con formato de correo
+                if (logger != null) logger("   - Verificando si existen cuentas locales de Windows creadas con correos...");
+                try {
+                    ProcessStartInfo psi = new ProcessStartInfo("net", "user");
+                    psi.CreateNoWindow = true;
+                    psi.UseShellExecute = false;
+                    psi.RedirectStandardOutput = true;
+                    Process p = Process.Start(psi);
+                    if (p != null)
+                    {
+                        string output = p.StandardOutput.ReadToEnd();
+                        p.WaitForExit();
+
+                        string[] lines = output.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (string line in lines)
+                        {
+                            string[] parts = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (string user in parts)
+                            {
+                                if (user.Contains("@"))
+                                {
+                                    try {
+                                        ProcessStartInfo delUser = new ProcessStartInfo("net", "user \"" + user + "\" /active:no");
+                                        delUser.CreateNoWindow = true;
+                                        delUser.UseShellExecute = false;
+                                        Process dp = Process.Start(delUser);
+                                        if (dp != null) dp.WaitForExit();
+                                        if (logger != null) logger("     * Cuenta de correo local desactivada: " + user);
+                                    } catch {}
+                                }
+                            }
+                        }
+                    }
+                } catch {}
+
+                // 5. Reset Radical de Navegadores (User Data Chrome y Edge)
+                if (logger != null) logger("   - Limpiando perfiles de Chrome y Edge para desvincular cuentas de correo en navegadores...");
+                ResetBrowserUserData(logger);
+
+                if (logger != null) logger("Purga radical de cuentas de correo y desvinculación completada con éxito.");
+            } catch (Exception ex) {
+                if (logger != null) logger("Aviso en purga de cuentas de correo: " + ex.Message);
+            }
         }
 
         public static void AllowMicrosoftAccounts()
@@ -589,16 +791,31 @@ namespace LayvelGuard
         {
             List<ProhibitedAppInfo> found = new List<ProhibitedAppInfo>();
             
-            string[] prohibitedKeywords = new string[] {
-                // Juegos & Launchers
+            List<string> prohibitedKeywordsList = new List<string>() {
+                // Juegos, Launchers & Emuladores
                 "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
-                // Torrents & P2P
-                "utorrent", "bittorrent", "qbittorrent", "ares",
+                "bluestacks", "ldplayer", "nox", "memu", "cheat engine", "stumble guys", "tlauncher", "lunar client", "feather client",
+                // Torrents, P2P & Reproductores No Autorizados
+                "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
                 // Navegadores No Autorizados (Solo Edge y Chrome permitidos)
-                "firefox", "opera", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
+                "firefox", "opera", "operagx", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
                 // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
-                "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner"
+                "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
+                // Mensajería y Control Remoto No Autorizado
+                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec"
             };
+
+            // Cargar reglas personalizadas del JSON local
+            List<string> customRules = LoadCustomProhibitedRules();
+            foreach (string cr in customRules)
+            {
+                if (!prohibitedKeywordsList.Contains(cr.ToLower()))
+                {
+                    prohibitedKeywordsList.Add(cr.ToLower());
+                }
+            }
+
+            string[] prohibitedKeywords = prohibitedKeywordsList.ToArray();
 
             string[] regKeys = new string[] {
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -987,13 +1204,24 @@ namespace LayvelGuard
         public static List<string> KillProhibitedProcesses()
         {
             List<string> detected = new List<string>();
-            string[] procs = new string[] {
+            List<string> procs = new List<string>() {
                 "RobloxPlayerBeta", "RobloxStudioBeta", "RobloxPlayerLauncher",
                 "Steam", "SteamService", "steamwebhelper", "MinecraftLauncher", "EpicGamesLauncher",
-                "uTorrent", "BitTorrent", "qBittorrent", "Ares",
+                "uTorrent", "BitTorrent", "qBittorrent", "Ares", "PopcornTime", "Stremio",
                 "firefox", "opera", "operagx", "brave", "vivaldi", "tor", "yandex", "ucbrowser",
-                "AvastUI", "AVGUI", "ccleaner", "mcshield", "bdagent"
+                "AvastUI", "AVGUI", "ccleaner", "mcshield", "bdagent",
+                "HD-Player", "bluestacks", "dnplayer", "Nox", "MEmu", "CheatEngine", "StumbleGuys", "TLauncher",
+                "Discord", "Telegram", "WhatsApp", "AnyDesk", "TeamViewer", "Parsec"
             };
+
+            foreach (string cr in LoadCustomProhibitedRules())
+            {
+                string procName = cr.Replace(".exe", "").Trim();
+                if (!procs.Exists(p => p.Equals(procName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    procs.Add(procName);
+                }
+            }
 
             foreach (string name in procs)
             {
@@ -1762,7 +1990,7 @@ namespace LayvelGuard
             btnRescan.ForeColor = Color.White;
             btnRescan.FlatStyle = FlatStyle.Flat;
             btnRescan.FlatAppearance.BorderSize = 0;
-            btnRescan.Size = new Size(160, 38);
+            btnRescan.Size = new Size(130, 38);
             btnRescan.Location = new Point(20, 460);
             btnRescan.Cursor = Cursors.Hand;
             btnRescan.Click += (s, e) => RunScan();
@@ -1775,11 +2003,24 @@ namespace LayvelGuard
             btnUninstall.ForeColor = Color.White;
             btnUninstall.FlatStyle = FlatStyle.Flat;
             btnUninstall.FlatAppearance.BorderSize = 0;
-            btnUninstall.Size = new Size(240, 38);
-            btnUninstall.Location = new Point(190, 460);
+            btnUninstall.Size = new Size(230, 38);
+            btnUninstall.Location = new Point(160, 460);
             btnUninstall.Cursor = Cursors.Hand;
             btnUninstall.Click += (s, e) => ExecuteSelectedUninstall();
             this.Controls.Add(btnUninstall);
+
+            Button btnAddRule = new Button();
+            btnAddRule.Text = "➕ Agregar App/Regla";
+            btnAddRule.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            btnAddRule.BackColor = Color.FromArgb(16, 185, 129);
+            btnAddRule.ForeColor = Color.White;
+            btnAddRule.FlatStyle = FlatStyle.Flat;
+            btnAddRule.FlatAppearance.BorderSize = 0;
+            btnAddRule.Size = new Size(175, 38);
+            btnAddRule.Location = new Point(400, 460);
+            btnAddRule.Cursor = Cursors.Hand;
+            btnAddRule.Click += (s, e) => OpenAddProhibitedDialog();
+            this.Controls.Add(btnAddRule);
 
             btnClose = new Button();
             btnClose.Text = "Cerrar";
@@ -1793,6 +2034,60 @@ namespace LayvelGuard
             btnClose.Cursor = Cursors.Hand;
             btnClose.Click += (s, e) => this.Close();
             this.Controls.Add(btnClose);
+        }
+
+        private void OpenAddProhibitedDialog()
+        {
+            Form dlg = new Form();
+            dlg.Width = 520;
+            dlg.Height = 260;
+            dlg.Text = "➕ Agregar Aplicación No Autorizada / Regla de Bloqueo";
+            dlg.StartPosition = FormStartPosition.CenterParent;
+            dlg.BackColor = Color.FromArgb(15, 23, 42);
+            dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+            dlg.MaximizeBox = false;
+            dlg.MinimizeBox = false;
+
+            Label lblSelect = new Label() { Left = 20, Top = 15, Text = "Seleccionar de Software Instalado en el PC:", AutoSize = true, ForeColor = Color.White, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
+            ComboBox cmbApps = new ComboBox() { Left = 20, Top = 40, Width = 460, Font = new Font("Segoe UI", 9.5f), DropDownStyle = ComboBoxStyle.DropDownList };
+            
+            try {
+                List<string> inv = Program.GetSoftwareInventory();
+                inv.Sort();
+                foreach (string app in inv) cmbApps.Items.Add(app);
+            } catch {}
+            if (cmbApps.Items.Count > 0) cmbApps.SelectedIndex = 0;
+
+            Label lblCustom = new Label() { Left = 20, Top = 80, Text = "O escribir palabra clave/proceso personalizado (ej. discord, stumble guys):", AutoSize = true, ForeColor = Color.FromArgb(148, 163, 184), Font = new Font("Segoe UI", 8.5f) };
+            TextBox tbCustom = new TextBox() { Left = 20, Top = 105, Width = 460, Font = new Font("Segoe UI", 9.5f) };
+
+            Button btnSave = new Button() { Text = "💾 Guardar Regla", Left = 240, Width = 130, Top = 160, Height = 36, DialogResult = DialogResult.OK, BackColor = Color.FromArgb(16, 185, 129), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Cursor = Cursors.Hand };
+            Button btnCancel = new Button() { Text = "Cancelar", Left = 380, Width = 100, Top = 160, Height = 36, DialogResult = DialogResult.Cancel, BackColor = Color.FromArgb(71, 85, 105), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Cursor = Cursors.Hand };
+
+            dlg.Controls.Add(lblSelect);
+            dlg.Controls.Add(cmbApps);
+            dlg.Controls.Add(lblCustom);
+            dlg.Controls.Add(tbCustom);
+            dlg.Controls.Add(btnSave);
+            dlg.Controls.Add(btnCancel);
+            dlg.AcceptButton = btnSave;
+
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                string ruleToAdd = tbCustom.Text.Trim();
+                if (string.IsNullOrWhiteSpace(ruleToAdd) && cmbApps.SelectedItem != null)
+                {
+                    ruleToAdd = cmbApps.SelectedItem.ToString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(ruleToAdd))
+                {
+                    Program.SaveCustomProhibitedRule(ruleToAdd);
+                    if (mainLogger != null) mainLogger("Regla prohibida registrada y guardada localmente: " + ruleToAdd);
+                    MessageBox.Show("Regla prohibida guardada con éxito:\r\n\r\n" + ruleToAdd + "\r\n\r\nGuardado en C:\\LayvelGuard\\custom_prohibited.json.", "LayvelGuard", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    RunScan();
+                }
+            }
         }
 
         private void RunScan()
@@ -1878,8 +2173,8 @@ namespace LayvelGuard
         private Panel panelActions, panelStatus;
 
         // Status items & controls
-        private Label badgeBlockWeb, badgeAccounts, badgeWallpaper, badgeService, badgeShortcuts, badgeUninstall;
-        private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleWallpaper, btnToggleService, btnToggleShortcuts, btnToggleUninstall;
+        private Label badgeBlockWeb, badgeAccounts, badgeEmailPurge, badgeWallpaper, badgeService, badgeShortcuts, badgeUninstall;
+        private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleEmailPurge, btnToggleWallpaper, btnToggleService, btnToggleShortcuts, btnToggleUninstall;
 
         private System.Windows.Forms.Timer telemetryTimer;
 
@@ -2133,7 +2428,16 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnCleanFiles);
 
-            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 440);
+            Button btnPurgeEmails = CreateActionButton("[11] Purga Radical Cuentas de Correo", Color.FromArgb(30, 41, 59), 440);
+            btnPurgeEmails.Click += (s, e) => RunAsync(() => {
+                Log("Iniciando purga radical de cuentas de correo y desvinculación...");
+                Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg));
+                RefreshStatusBadges();
+                Log("Purga de cuentas de correo completada.");
+            });
+            leftPanel.Controls.Add(btnPurgeEmails);
+
+            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 484);
             btnUnblock.Click += (s, e) => RunAsync(() => {
                 Log("Desbloqueando y restaurando configuraciones...");
                 Program.UnblockEquipment();
@@ -2206,8 +2510,13 @@ namespace LayvelGuard
             y += 60;
 
             CreateStatusRow(panelStatus, "Restriccion Cuentas Microsoft / Escuela:", y, out badgeAccounts, out btnToggleAccounts,
-                (s, e) => RunAsync(() => { Program.EnforceLocalAccountsOnly(); RefreshStatusBadges(); Log("Cuentas Microsoft bloqueadas."); }),
+                (s, e) => RunAsync(() => { Program.EnforceLocalAccountsOnly((msg) => Log(msg)); RefreshStatusBadges(); Log("Cuentas Microsoft bloqueadas y desvinculadas."); }),
                 (s, e) => RunAsync(() => { Program.AllowMicrosoftAccounts(); RefreshStatusBadges(); Log("Cuentas Microsoft permitidas."); }));
+            y += 60;
+
+            CreateStatusRow(panelStatus, "Purga Radical de Cuentas de Correo / Tokens:", y, out badgeEmailPurge, out btnToggleEmailPurge,
+                (s, e) => RunAsync(() => { Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg)); RefreshStatusBadges(); }),
+                (s, e) => Log("Purga de cuentas de correo finalizada."));
             y += 60;
 
             CreateStatusRow(panelStatus, "Perfiles Institucionales (Fondos / Logos):", y, out badgeWallpaper, out btnToggleWallpaper,
@@ -2399,6 +2708,9 @@ namespace LayvelGuard
                     }
                     UpdateBadge(badgeAccounts, badgeAccounts != null ? btnToggleAccounts : null, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
 
+                    // 2b. Purga de Cuentas de Correo
+                    UpdateBadge(badgeEmailPurge, btnToggleEmailPurge, true, "EJECUTAR PURGA", "INACTIVO");
+
                     // 3. Perfiles Institucionales
                     bool isWallpaperSet = Directory.Exists(@"C:\LayvelGuard\Instituciones");
                     UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "GESTOR ACTIVO", "NO INSTALADO");
@@ -2506,9 +2818,9 @@ namespace LayvelGuard
             Program.UninstallProhibitedSoftware((msg) => Log("      " + msg));
 
             SetProgress(30);
-            Log("[2/8] Restringiendo inicio de sesion a Cuentas Locales únicamente...");
-            Program.EnforceLocalAccountsOnly();
-            Log("      -> Politicas de Cuentas Locales aplicadas.");
+            Log("[2/8] Restringiendo y purgando inicio de sesión de Cuentas de Correo / MS...");
+            Program.EnforceLocalAccountsOnly((msg) => Log("      " + msg));
+            Log("      -> Políticas de Cuentas Locales y purga de correos aplicadas.");
 
             SetProgress(45);
             Log("[3/8] Aplicando bloqueo web y restricción de perfiles de navegación...");

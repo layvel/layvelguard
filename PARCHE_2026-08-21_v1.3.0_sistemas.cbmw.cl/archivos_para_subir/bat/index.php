@@ -1,52 +1,40 @@
 <?php
-// Router para servir el Agente CBMW (.NET Nativo 30 KB)
+// Router de descarga e instalación remota para LayvelGuard Pro
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
 $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
 
-// Si es ejecucion directa desde PowerShell (irm https://sistemas.cbmw.cl/bat | iex)
+// Si es ejecución directa desde PowerShell / curl (irm https://sistemas.cbmw.cl/bat | iex)
 if (stripos($ua, 'PowerShell') !== false || stripos($ua, 'curl') !== false) {
     header('Content-Type: text/plain; charset=utf-8');
     
     $rand = rand(10000, 99999);
     echo <<<POWERSHELL
-# Loader Automático Agente CBMW (.NET Nativo 30 KB)
-\$targetDir = "C:\\CBMW"
+# Loader Automático LayvelGuard Pro (.NET Nativo v1.4.0)
+\$targetDir = "C:\\LayvelGuard"
 if (-not (Test-Path \$targetDir)) { New-Item -ItemType Directory -Path \$targetDir -Force | Out-Null }
-\$exePath = "\$targetDir\\Menu_Administracion_CBMW.exe"
+\$exePath = "\$targetDir\\LayvelGuard.exe"
 
-Stop-Process -Name "Menu_Administracion_CBMW" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "LayvelGuard" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
-curl.exe -s -L -H "Cache-Control: no-cache" "https://sistemas.cbmw.cl/bat/Menu_Administracion_CBMW.exe?v=$rand" -o \$exePath
-curl.exe -s -L -H "Cache-Control: no-cache" "https://sistemas.cbmw.cl/lab-config.json?v=$rand" -o "\$targetDir\\lab-config.json"
+curl.exe -s -L -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/layvel/layvelguard/main/LayvelGuard.exe?v=$rand" -o \$exePath
+curl.exe -s -L -H "Cache-Control: no-cache" "https://raw.githubusercontent.com/layvel/layvelguard/main/lab-config.json?v=$rand" -o "\$targetDir\\lab-config.json"
 
 if (Test-Path \$exePath) {
     Start-Process -FilePath \$exePath -Verb RunAs
 } else {
-    Write-Host "[!] Error al descargar el ejecutable CBMW desde el servidor." -ForegroundColor Red
+    Write-Host "[!] Error al descargar LayvelGuard.exe desde GitHub / Servidor central." -ForegroundColor Red
 }
 POWERSHELL;
     exit;
 }
 
-// Para navegadores normales, servir descarga limpia del ejecutable EXE
-$exeFile = __DIR__ . '/Menu_Administracion_CBMW.exe';
-if (file_exists($exeFile)) {
-    header('Content-Type: application/x-msdownload');
-    header('Content-Disposition: attachment; filename="Menu_Administracion_CBMW.exe"');
-    header('Content-Length: ' . filesize($exeFile));
-    readfile($exeFile);
-    exit;
-}
+// Para navegadores normales, servir descarga o redirigir al ejecutable oficial de GitHub
+$githubExe = "https://raw.githubusercontent.com/layvel/layvelguard/main/LayvelGuard.exe";
+header("Location: $githubExe");
+exit;
 
-$batFile = __DIR__ . '/descargar_e_instalar_cbmw.bat';
-if (file_exists($batFile)) {
-    header('Content-Type: application/bat');
-    header('Content-Disposition: attachment; filename="descargar_e_instalar_cbmw.bat"');
-    readfile($batFile);
-    exit;
-}

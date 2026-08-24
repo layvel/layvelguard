@@ -787,42 +787,16 @@ namespace LayvelGuard
             } catch {}
         }
 
-        public static List<ProhibitedAppInfo> ScanProhibitedSoftware()
+        public static List<ProhibitedAppInfo> GetAllInstalledApplications()
         {
-            List<ProhibitedAppInfo> found = new List<ProhibitedAppInfo>();
-            
-            List<string> prohibitedKeywordsList = new List<string>() {
-                // Juegos, Launchers & Emuladores
-                "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
-                "bluestacks", "ldplayer", "nox", "memu", "cheat engine", "stumble guys", "tlauncher", "lunar client", "feather client",
-                // Torrents, P2P & Reproductores No Autorizados
-                "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
-                // Navegadores No Autorizados (Solo Edge y Chrome permitidos)
-                "firefox", "opera", "operagx", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
-                // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
-                "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
-                // Mensajería y Control Remoto No Autorizado
-                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec"
-            };
-
-            // Cargar reglas personalizadas del JSON local
-            List<string> customRules = LoadCustomProhibitedRules();
-            foreach (string cr in customRules)
-            {
-                if (!prohibitedKeywordsList.Contains(cr.ToLower()))
-                {
-                    prohibitedKeywordsList.Add(cr.ToLower());
-                }
-            }
-
-            string[] prohibitedKeywords = prohibitedKeywordsList.ToArray();
+            List<ProhibitedAppInfo> allApps = new List<ProhibitedAppInfo>();
 
             string[] regKeys = new string[] {
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
                 @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
             };
 
-            // 1. Escaneo en HKLM y HKCU
+            // 1. Registro HKLM y HKCU
             RegistryKey[] rootKeys = new RegistryKey[] { Registry.LocalMachine, Registry.CurrentUser };
             foreach (RegistryKey root in rootKeys)
             {
@@ -842,27 +816,24 @@ namespace LayvelGuard
                                             object displayNameObj = subkey.GetValue("DisplayName");
                                             if (displayNameObj != null)
                                             {
-                                                string dispName = displayNameObj.ToString();
-                                                string lowerName = dispName.ToLower();
+                                                string dispName = displayNameObj.ToString().Trim();
+                                                if (string.IsNullOrWhiteSpace(dispName)) continue;
+                                                if (dispName.StartsWith("KB", StringComparison.OrdinalIgnoreCase) && dispName.Length > 8) continue;
 
-                                                foreach (string kw in prohibitedKeywords)
+                                                ProhibitedAppInfo app = new ProhibitedAppInfo();
+                                                app.Name = dispName;
+                                                object unist = subkey.GetValue("QuietUninstallString") ?? subkey.GetValue("UninstallString");
+                                                app.UninstallString = unist != null ? unist.ToString() : "";
+                                                object instLoc = subkey.GetValue("InstallLocation");
+                                                app.InstallLocation = instLoc != null ? instLoc.ToString() : "";
+                                                app.KeyPath = (root == Registry.LocalMachine ? "HKLM\\" : "HKCU\\") + keyPath + "\\" + subkeyName;
+
+                                                bool already = false;
+                                                foreach (var f in allApps)
                                                 {
-                                                    if (lowerName.Contains(kw))
-                                                    {
-                                                        ProhibitedAppInfo app = new ProhibitedAppInfo();
-                                                        app.Name = dispName;
-                                                        object unist = subkey.GetValue("QuietUninstallString") ?? subkey.GetValue("UninstallString");
-                                                        app.UninstallString = unist != null ? unist.ToString() : "";
-                                                        object instLoc = subkey.GetValue("InstallLocation");
-                                                        app.InstallLocation = instLoc != null ? instLoc.ToString() : "";
-                                                        app.KeyPath = keyPath + "\\" + subkeyName;
-
-                                                        bool already = false;
-                                                        foreach (var f in found) { if (f.Name.Equals(app.Name, StringComparison.OrdinalIgnoreCase)) already = true; }
-                                                        if (!already) found.Add(app);
-                                                        break;
-                                                    }
+                                                    if (f.Name.Equals(app.Name, StringComparison.OrdinalIgnoreCase)) already = true;
                                                 }
+                                                if (!already) allApps.Add(app);
                                             }
                                         }
                                     }
@@ -873,7 +844,7 @@ namespace LayvelGuard
                 }
             }
 
-            // 2. Escaneo en HKEY_USERS (Todos los perfiles de usuario del sistema)
+            // 2. Registro HKEY_USERS (Todos los perfiles de usuario del equipo)
             try {
                 using (RegistryKey hkUsers = Registry.Users)
                 {
@@ -899,27 +870,23 @@ namespace LayvelGuard
                                                             object displayNameObj = subkey.GetValue("DisplayName");
                                                             if (displayNameObj != null)
                                                             {
-                                                                string dispName = displayNameObj.ToString();
-                                                                string lowerName = dispName.ToLower();
+                                                                string dispName = displayNameObj.ToString().Trim();
+                                                                if (string.IsNullOrWhiteSpace(dispName)) continue;
 
-                                                                foreach (string kw in prohibitedKeywords)
+                                                                ProhibitedAppInfo app = new ProhibitedAppInfo();
+                                                                app.Name = dispName;
+                                                                object unist = subkey.GetValue("QuietUninstallString") ?? subkey.GetValue("UninstallString");
+                                                                app.UninstallString = unist != null ? unist.ToString() : "";
+                                                                object instLoc = subkey.GetValue("InstallLocation");
+                                                                app.InstallLocation = instLoc != null ? instLoc.ToString() : "";
+                                                                app.KeyPath = "HKEY_USERS\\" + sid + "\\" + keyPath + "\\" + subkeyName;
+
+                                                                bool already = false;
+                                                                foreach (var f in allApps)
                                                                 {
-                                                                    if (lowerName.Contains(kw))
-                                                                    {
-                                                                        ProhibitedAppInfo app = new ProhibitedAppInfo();
-                                                                        app.Name = dispName;
-                                                                        object unist = subkey.GetValue("QuietUninstallString") ?? subkey.GetValue("UninstallString");
-                                                                        app.UninstallString = unist != null ? unist.ToString() : "";
-                                                                        object instLoc = subkey.GetValue("InstallLocation");
-                                                                        app.InstallLocation = instLoc != null ? instLoc.ToString() : "";
-                                                                        app.KeyPath = "HKEY_USERS\\" + sid + "\\" + keyPath + "\\" + subkeyName;
-
-                                                                        bool already = false;
-                                                                        foreach (var f in found) { if (f.Name.Equals(app.Name, StringComparison.OrdinalIgnoreCase)) already = true; }
-                                                                        if (!already) found.Add(app);
-                                                                        break;
-                                                                    }
+                                                                    if (f.Name.Equals(app.Name, StringComparison.OrdinalIgnoreCase)) already = true;
                                                                 }
+                                                                if (!already) allApps.Add(app);
                                                             }
                                                         }
                                                     }
@@ -934,7 +901,7 @@ namespace LayvelGuard
                 }
             } catch {}
 
-            // 3. Escaneo exhaustivo en carpetas de TODOS los perfiles de C:\Users\*
+            // 3. Escaneo en Carpetas AppData en C:\Users\* (osu!, Discord, Telegram, Portable Games, etc.)
             try {
                 if (Directory.Exists(@"C:\Users"))
                 {
@@ -943,97 +910,137 @@ namespace LayvelGuard
                         string uName = Path.GetFileName(userDir);
                         if (uName.Equals("Public", StringComparison.OrdinalIgnoreCase) || uName.Equals("Default", StringComparison.OrdinalIgnoreCase) || uName.Equals("All Users", StringComparison.OrdinalIgnoreCase)) continue;
 
-                        string[] targetPaths = new string[] {
-                            Path.Combine(userDir, @"AppData\Local\Roblox"),
-                            Path.Combine(userDir, @"AppData\Local\Programs\Roblox"),
-                            Path.Combine(userDir, @"AppData\Local\Steam"),
-                            Path.Combine(userDir, @"AppData\Roaming\Steam"),
-                            Path.Combine(userDir, @"AppData\Roaming\uTorrent"),
-                            Path.Combine(userDir, @"AppData\Local\uTorrent"),
-                            Path.Combine(userDir, @"AppData\Roaming\BitTorrent"),
-                            Path.Combine(userDir, @"AppData\Roaming\.minecraft"),
-                            Path.Combine(userDir, @"AppData\Local\Mozilla"),
-                            Path.Combine(userDir, @"AppData\Roaming\Mozilla"),
-                            Path.Combine(userDir, @"AppData\Local\Opera Software"),
-                            Path.Combine(userDir, @"AppData\Roaming\Opera Software"),
-                            Path.Combine(userDir, @"AppData\Local\BraveSoftware"),
-                            Path.Combine(userDir, @"AppData\Local\Vivaldi"),
-                            Path.Combine(userDir, @"AppData\Local\Tor Browser")
+                        string[] appDataDirs = new string[] {
+                            Path.Combine(userDir, @"AppData\Local"),
+                            Path.Combine(userDir, @"AppData\Roaming"),
+                            Path.Combine(userDir, @"AppData\Local\Programs")
                         };
 
-                        foreach (string path in targetPaths)
+                        foreach (string parentDir in appDataDirs)
                         {
-                            if (Directory.Exists(path))
+                            if (Directory.Exists(parentDir))
                             {
-                                string appTitle = Path.GetFileName(path);
-                                if (appTitle.Equals("Programs", StringComparison.OrdinalIgnoreCase) || appTitle.Equals("Local", StringComparison.OrdinalIgnoreCase) || appTitle.Equals("Roaming", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    appTitle = Path.GetFileName(Path.GetDirectoryName(path));
-                                }
+                                try {
+                                    foreach (string subDir in Directory.GetDirectories(parentDir))
+                                    {
+                                        string dirName = Path.GetFileName(subDir);
+                                        if (dirName.Equals("Microsoft", StringComparison.OrdinalIgnoreCase) || dirName.Equals("Temp", StringComparison.OrdinalIgnoreCase) || dirName.Equals("Packages", StringComparison.OrdinalIgnoreCase) || dirName.Equals("CrashDumps", StringComparison.OrdinalIgnoreCase)) continue;
 
-                                bool already = false;
-                                foreach (var f in found)
-                                {
-                                    if (!string.IsNullOrEmpty(f.InstallLocation) && f.InstallLocation.Equals(path, StringComparison.OrdinalIgnoreCase)) already = true;
-                                }
-
-                                if (!already)
-                                {
-                                    ProhibitedAppInfo app = new ProhibitedAppInfo();
-                                    app.Name = string.Format("{0} (Carpeta: {1})", appTitle, uName);
-                                    app.InstallLocation = path;
-                                    app.UninstallString = "";
-                                    found.Add(app);
-                                }
+                                        string[] exes = Directory.GetFiles(subDir, "*.exe", SearchOption.TopDirectoryOnly);
+                                        if (exes.Length > 0)
+                                        {
+                                            bool already = false;
+                                            foreach (var f in allApps)
+                                            {
+                                                if (f.Name.StartsWith(dirName, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrEmpty(f.InstallLocation) && f.InstallLocation.Equals(subDir, StringComparison.OrdinalIgnoreCase))) already = true;
+                                            }
+                                            if (!already)
+                                            {
+                                                ProhibitedAppInfo app = new ProhibitedAppInfo();
+                                                app.Name = string.Format("{0} (Carpeta AppData: {1})", dirName, uName);
+                                                app.InstallLocation = subDir;
+                                                app.UninstallString = "";
+                                                allApps.Add(app);
+                                            }
+                                        }
+                                    }
+                                } catch {}
                             }
                         }
                     }
                 }
             } catch {}
 
-            // 4. Carpetas globales de Program Files y ProgramData
-            string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            // 4. Escaneo de Accesos Directos del Menú Inicio
+            try {
+                string[] startMenuPaths = new string[] {
+                    @"C:\ProgramData\Microsoft\Windows\Start Menu\Programs",
+                    Environment.GetFolderPath(Environment.SpecialFolder.Programs)
+                };
 
-            string[] globalPaths = new string[] {
-                Path.Combine(pf86, "Steam"),
-                Path.Combine(pf, "Steam"),
-                Path.Combine(pf86, "Roblox"),
-                Path.Combine(pf, "Roblox"),
-                Path.Combine(pf86, "Mozilla Firefox"),
-                Path.Combine(pf, "Mozilla Firefox"),
-                Path.Combine(pf86, "Opera"),
-                Path.Combine(pf, "Opera"),
-                Path.Combine(pf86, "BraveSoftware"),
-                Path.Combine(pf, "BraveSoftware"),
-                Path.Combine(pf86, "AVAST Software"),
-                Path.Combine(pf, "AVAST Software"),
-                Path.Combine(pf86, "AVG"),
-                Path.Combine(pf, "AVG"),
-                Path.Combine(pf86, "CCleaner"),
-                Path.Combine(pf, "CCleaner"),
-                @"C:\ProgramData\Roblox",
-                @"C:\ProgramData\AVAST Software",
-                @"C:\Games"
+                foreach (string smPath in startMenuPaths)
+                {
+                    if (Directory.Exists(smPath))
+                    {
+                        try {
+                            foreach (string lnk in Directory.GetFiles(smPath, "*.lnk", SearchOption.AllDirectories))
+                            {
+                                string lnkName = Path.GetFileNameWithoutExtension(lnk);
+                                if (lnkName.StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase) || lnkName.StartsWith("Desinstalar", StringComparison.OrdinalIgnoreCase)) continue;
+
+                                bool already = false;
+                                foreach (var f in allApps)
+                                {
+                                    if (f.Name.Contains(lnkName) || lnkName.Contains(f.Name)) already = true;
+                                }
+                                if (!already)
+                                {
+                                    ProhibitedAppInfo app = new ProhibitedAppInfo();
+                                    app.Name = lnkName + " (Menú Inicio)";
+                                    app.InstallLocation = Path.GetDirectoryName(lnk);
+                                    app.UninstallString = "";
+                                    allApps.Add(app);
+                                }
+                            }
+                        } catch {}
+                    }
+                }
+            } catch {}
+
+            return allApps;
+        }
+
+        public static List<ProhibitedAppInfo> ScanProhibitedSoftware()
+        {
+            List<ProhibitedAppInfo> found = new List<ProhibitedAppInfo>();
+            List<ProhibitedAppInfo> allSystemApps = GetAllInstalledApplications();
+
+            List<string> prohibitedKeywordsList = new List<string>() {
+                // Juegos, Launchers & Emuladores
+                "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
+                "bluestacks", "ldplayer", "nox", "memu", "cheat engine", "stumble guys", "tlauncher", "lunar client", "feather client", "osu",
+                // Torrents, P2P & Reproductores No Autorizados
+                "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
+                // Navegadores No Autorizados (Solo Edge y Chrome permitidos)
+                "firefox", "opera", "operagx", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
+                // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
+                "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
+                // Mensajería y Control Remoto No Autorizado
+                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec"
             };
 
-            foreach (string path in globalPaths)
+            List<string> customRules = LoadCustomProhibitedRules();
+            foreach (string cr in customRules)
             {
-                if (Directory.Exists(path))
+                if (!prohibitedKeywordsList.Contains(cr.ToLower()))
+                {
+                    prohibitedKeywordsList.Add(cr.ToLower());
+                }
+            }
+
+            foreach (var app in allSystemApps)
+            {
+                string lowerName = app.Name.ToLower();
+                string lowerLoc = (app.InstallLocation ?? "").ToLower();
+
+                bool isProhibited = false;
+                foreach (string kw in prohibitedKeywordsList)
+                {
+                    if (lowerName.Contains(kw) || lowerLoc.Contains(kw))
+                    {
+                        isProhibited = true;
+                        break;
+                    }
+                }
+
+                if (isProhibited)
                 {
                     bool already = false;
                     foreach (var f in found)
                     {
-                        if (!string.IsNullOrEmpty(f.InstallLocation) && f.InstallLocation.Equals(path, StringComparison.OrdinalIgnoreCase)) already = true;
+                        if (f.Name.Equals(app.Name, StringComparison.OrdinalIgnoreCase)) already = true;
                     }
-                    if (!already)
-                    {
-                        ProhibitedAppInfo app = new ProhibitedAppInfo();
-                        app.Name = "Directorio Sistema: " + Path.GetFileName(path);
-                        app.InstallLocation = path;
-                        app.UninstallString = "";
-                        found.Add(app);
-                    }
+                    if (!already) found.Add(app);
                 }
             }
 
@@ -1243,41 +1250,16 @@ namespace LayvelGuard
         public static List<string> GetSoftwareInventory()
         {
             List<string> apps = new List<string>();
-            string[] regKeys = new string[] {
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-            };
-
-            RegistryKey[] rootKeys = new RegistryKey[] { Registry.LocalMachine, Registry.CurrentUser };
-            foreach (RegistryKey root in rootKeys)
-            {
-                foreach (string keyPath in regKeys)
+            try {
+                List<ProhibitedAppInfo> all = GetAllInstalledApplications();
+                foreach (var a in all)
                 {
-                    try {
-                        using (RegistryKey key = root.OpenSubKey(keyPath))
-                        {
-                            if (key != null)
-                            {
-                                foreach (string subkeyName in key.GetSubKeyNames())
-                                {
-                                    using (RegistryKey subkey = key.OpenSubKey(subkeyName))
-                                    {
-                                        if (subkey != null)
-                                        {
-                                            object displayName = subkey.GetValue("DisplayName");
-                                            if (displayName != null && !string.IsNullOrWhiteSpace(displayName.ToString()))
-                                            {
-                                                string name = displayName.ToString();
-                                                if (!apps.Contains(name)) apps.Add(name);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch {}
+                    if (!string.IsNullOrWhiteSpace(a.Name) && !apps.Contains(a.Name))
+                    {
+                        apps.Add(a.Name);
+                    }
                 }
-            }
+            } catch {}
             return apps;
         }
 
@@ -1896,6 +1878,7 @@ namespace LayvelGuard
     public class UninstallManagerForm : Form
     {
         private CheckedListBox chkListApps;
+        private ComboBox cmbFilterMode;
         private Button btnUninstall, btnRescan, btnClose;
         private Label lblInfo;
         private List<ProhibitedAppInfo> scannedApps;
@@ -1949,7 +1932,7 @@ namespace LayvelGuard
             header.Padding = new Padding(15, 10, 15, 10);
 
             Label lblTitle = new Label();
-            lblTitle.Text = "🔍 LayvelGuard - Escáner e Desinstalador Interactivo (v" + Program.CURRENT_VERSION + ")";
+            lblTitle.Text = "🔍 LayvelGuard - Escáner de Inventario 100% e Desinstalador (v" + Program.CURRENT_VERSION + ")";
             lblTitle.Font = new Font("Segoe UI", 12, FontStyle.Bold);
             lblTitle.ForeColor = Color.White;
             lblTitle.Location = new Point(15, 12);
@@ -1966,9 +1949,28 @@ namespace LayvelGuard
 
             this.Controls.Add(header);
 
+            Label lblMode = new Label();
+            lblMode.Text = "Modo Vista:";
+            lblMode.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            lblMode.ForeColor = Color.FromArgb(241, 245, 249);
+            lblMode.Location = new Point(20, 85);
+            lblMode.AutoSize = true;
+            this.Controls.Add(lblMode);
+
+            cmbFilterMode = new ComboBox();
+            cmbFilterMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbFilterMode.Font = new Font("Segoe UI", 9.5f);
+            cmbFilterMode.Location = new Point(120, 82);
+            cmbFilterMode.Size = new Size(565, 28);
+            cmbFilterMode.Items.Add("🚫 Aplicaciones Prohibidas Detectadas");
+            cmbFilterMode.Items.Add("🌐 Todo el Inventario del PC (100% de Software Instalado)");
+            cmbFilterMode.SelectedIndex = 0;
+            cmbFilterMode.SelectedIndexChanged += (s, e) => RunScan();
+            this.Controls.Add(cmbFilterMode);
+
             chkListApps = new CheckedListBox();
-            chkListApps.Location = new Point(20, 85);
-            chkListApps.Size = new Size(665, 330);
+            chkListApps.Location = new Point(20, 118);
+            chkListApps.Size = new Size(665, 300);
             chkListApps.BackColor = Color.FromArgb(9, 13, 22);
             chkListApps.ForeColor = Color.FromArgb(241, 245, 249);
             chkListApps.Font = new Font("Segoe UI", 9.5f);
@@ -2010,7 +2012,7 @@ namespace LayvelGuard
             this.Controls.Add(btnUninstall);
 
             Button btnAddRule = new Button();
-            btnAddRule.Text = "➕ Agregar App/Regla";
+            btnAddRule.Text = "➕ Marcar Prohibida";
             btnAddRule.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
             btnAddRule.BackColor = Color.FromArgb(16, 185, 129);
             btnAddRule.ForeColor = Color.White;
@@ -2061,6 +2063,13 @@ namespace LayvelGuard
             Label lblCustom = new Label() { Left = 20, Top = 80, Text = "O escribir palabra clave/proceso personalizado (ej. discord, stumble guys):", AutoSize = true, ForeColor = Color.FromArgb(148, 163, 184), Font = new Font("Segoe UI", 8.5f) };
             TextBox tbCustom = new TextBox() { Left = 20, Top = 105, Width = 460, Font = new Font("Segoe UI", 9.5f) };
 
+            if (chkListApps.SelectedItem != null)
+            {
+                string selText = chkListApps.SelectedItem.ToString();
+                selText = selText.Replace("[🚫 PROHIBIDA]", "").Replace("[🟢 INSTALADA]", "").Trim();
+                tbCustom.Text = selText;
+            }
+
             Button btnSave = new Button() { Text = "💾 Guardar Regla", Left = 240, Width = 130, Top = 160, Height = 36, DialogResult = DialogResult.OK, BackColor = Color.FromArgb(16, 185, 129), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Cursor = Cursors.Hand };
             Button btnCancel = new Button() { Text = "Cancelar", Left = 380, Width = 100, Top = 160, Height = 36, DialogResult = DialogResult.Cancel, BackColor = Color.FromArgb(71, 85, 105), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Cursor = Cursors.Hand };
 
@@ -2093,30 +2102,47 @@ namespace LayvelGuard
         private void RunScan()
         {
             chkListApps.Items.Clear();
-            lblInfo.Text = "Escaneando Registro de Usuarios y Disco...";
+            bool showAll = cmbFilterMode != null && cmbFilterMode.SelectedIndex == 1;
+            lblInfo.Text = showAll ? "Escaneando 100% de aplicaciones e inventario del PC..." : "Escaneando Registro de Usuarios y Disco...";
             lblInfo.ForeColor = Color.FromArgb(56, 189, 248);
 
             ThreadPool.QueueUserWorkItem(state => {
-                scannedApps = Program.ScanProhibitedSoftware();
+                scannedApps = showAll ? Program.GetAllInstalledApplications() : Program.ScanProhibitedSoftware();
+                List<ProhibitedAppInfo> prohibitedOnly = Program.ScanProhibitedSoftware();
 
                 SafeInvoke(() => {
                     chkListApps.Items.Clear();
                     int checkedCount = 0;
                     foreach (var app in scannedApps)
                     {
-                        chkListApps.Items.Add(app.Name, true);
-                        checkedCount++;
+                        bool isProhibited = false;
+                        foreach (var p in prohibitedOnly)
+                        {
+                            if (p.Name.Equals(app.Name, StringComparison.OrdinalIgnoreCase)) isProhibited = true;
+                        }
+
+                        if (showAll)
+                        {
+                            string itemText = string.Format("{0} {1}", isProhibited ? "[🚫 PROHIBIDA]" : "[🟢 INSTALADA]", app.Name);
+                            chkListApps.Items.Add(itemText, isProhibited);
+                            if (isProhibited) checkedCount++;
+                        }
+                        else
+                        {
+                            chkListApps.Items.Add(app.Name, true);
+                            checkedCount++;
+                        }
                     }
 
                     if (scannedApps.Count == 0)
                     {
-                        lblInfo.Text = "🟢 No se encontraron aplicaciones no autorizadas (Juegos, Browsers extra o Antivirus).";
+                        lblInfo.Text = "🟢 No se encontraron aplicaciones.";
                         lblInfo.ForeColor = Color.FromArgb(74, 222, 128);
                     }
                     else
                     {
-                        lblInfo.Text = string.Format("⚠️ Detectadas {0} aplicaciones no autorizadas ({1} marcadas).", scannedApps.Count, checkedCount);
-                        lblInfo.ForeColor = Color.FromArgb(251, 191, 36);
+                        lblInfo.Text = string.Format(showAll ? "🌐 Inventario total: {0} apps encontradas en el PC ({1} prohibidas)." : "⚠️ Detectadas {0} aplicaciones no autorizadas ({1} marcadas).", scannedApps.Count, checkedCount);
+                        lblInfo.ForeColor = showAll ? Color.FromArgb(56, 189, 248) : Color.FromArgb(251, 191, 36);
                     }
                 });
             });

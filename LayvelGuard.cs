@@ -22,7 +22,7 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.4.0";
+        public const string CURRENT_VERSION = "1.5.0";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
         public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
@@ -320,6 +320,7 @@ namespace LayvelGuard
                 InstallStartupTask();
                 DoBlockGames();
                 EnforceLocalAccountsOnly();
+                BlockMouseCustomization();
                 
                 string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
                 if (!File.Exists(cbmwFondo)) EnsureDefaultInstitutionsExist();
@@ -329,6 +330,7 @@ namespace LayvelGuard
                 if (File.Exists(cbmwLogo)) SetUserProfilePicture(cbmwLogo);
 
                 UninstallProhibitedSoftware(null);
+                EnforceDefaultApplications(null);
                 List<string> detected = KillProhibitedProcesses();
             } catch {}
         }
@@ -570,6 +572,113 @@ namespace LayvelGuard
 
                 Process p = Process.Start(new ProcessStartInfo("ipconfig", "/flushdns") { CreateNoWindow = true, UseShellExecute = false });
                 if (p != null) p.WaitForExit();
+                
+                AllowMouseCustomization();
+            } catch {}
+        }
+
+        public static void BlockMouseCustomization(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("Aplicando bloqueo de personalización y tamaño del mouse...");
+
+                string[] policyKeys = new string[] {
+                    @"SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop",
+                    @"Software\Policies\Microsoft\Windows\Control Panel\Desktop",
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer",
+                    @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+                };
+
+                foreach (string keyPath in policyKeys)
+                {
+                    try {
+                        RegistryKey root = keyPath.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? Registry.CurrentUser : Registry.LocalMachine;
+                        using (RegistryKey key = root.CreateSubKey(keyPath))
+                        {
+                            if (key != null)
+                            {
+                                key.SetValue("NoChangingMousePointers", 1, RegistryValueKind.DWord);
+                            }
+                        }
+                    } catch {}
+                }
+
+                try {
+                    using (RegistryKey accessKey = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Accessibility"))
+                    {
+                        if (accessKey != null)
+                        {
+                            accessKey.SetValue("CursorSize", 1, RegistryValueKind.DWord);
+                            accessKey.SetValue("CursorColor", 0, RegistryValueKind.DWord);
+                        }
+                    }
+                } catch {}
+
+                try {
+                    using (RegistryKey cursorKey = Registry.CurrentUser.CreateSubKey(@"Control Panel\Cursors"))
+                    {
+                        if (cursorKey != null)
+                        {
+                            cursorKey.SetValue("", "Windows Default", RegistryValueKind.String);
+                            cursorKey.SetValue("Scheme Source", 0, RegistryValueKind.DWord);
+                            cursorKey.SetValue("CursorBaseSize", 32, RegistryValueKind.DWord);
+
+                            cursorKey.SetValue("AppStarting", @"%SystemRoot%\cursors\aero_working.ani", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("Arrow", @"%SystemRoot%\cursors\aero_arrow.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("Crosshair", "", RegistryValueKind.String);
+                            cursorKey.SetValue("Hand", @"%SystemRoot%\cursors\aero_link.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("Help", @"%SystemRoot%\cursors\aero_helpsel.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("IBeam", "", RegistryValueKind.String);
+                            cursorKey.SetValue("No", @"%SystemRoot%\cursors\aero_unavail.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("NWPen", @"%SystemRoot%\cursors\aero_pen.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("SizeAll", @"%SystemRoot%\cursors\aero_move.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("SizeNESW", @"%SystemRoot%\cursors\aero_nesw.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("SizeNS", @"%SystemRoot%\cursors\aero_ns.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("SizeNWSE", @"%SystemRoot%\cursors\aero_nwse.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("SizeWE", @"%SystemRoot%\cursors\aero_we.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("UpArrow", @"%SystemRoot%\cursors\aero_up.cur", RegistryValueKind.ExpandString);
+                            cursorKey.SetValue("Wait", @"%SystemRoot%\cursors\aero_busy.ani", RegistryValueKind.ExpandString);
+                        }
+                    }
+                } catch {}
+
+                try {
+                    SystemParametersInfo(0x0057, 0, null, 0x01 | 0x02);
+                } catch {}
+
+                if (logger != null) logger("Bloqueo de personalización y tamaño del mouse aplicado correctamente.");
+            } catch (Exception ex) {
+                if (logger != null) logger("Aviso al aplicar bloqueo de mouse: " + ex.Message);
+            }
+        }
+
+        public static void AllowMouseCustomization(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("Removiendo bloqueo de personalización de mouse...");
+
+                string[] policyKeys = new string[] {
+                    @"SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop",
+                    @"Software\Policies\Microsoft\Windows\Control Panel\Desktop",
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer",
+                    @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+                };
+
+                foreach (string keyPath in policyKeys)
+                {
+                    try {
+                        RegistryKey root = keyPath.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? Registry.CurrentUser : Registry.LocalMachine;
+                        using (RegistryKey key = root.OpenSubKey(keyPath, true))
+                        {
+                            if (key != null)
+                            {
+                                key.DeleteValue("NoChangingMousePointers", false);
+                            }
+                        }
+                    } catch {}
+                }
+
+                if (logger != null) logger("Personalización de mouse permitida.");
             } catch {}
         }
 
@@ -1003,6 +1112,8 @@ namespace LayvelGuard
                 "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
                 // Navegadores No Autorizados (Solo Edge y Chrome permitidos)
                 "firefox", "opera", "operagx", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
+                // Editores y Suites Ofimáticas No Autorizadas (Solo MS Office y Nitro PDF permitidos)
+                "libreoffice", "openoffice", "wps office", "wps", "onlyoffice", "freeoffice", "polaris office", "abiword", "foxit",
                 // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
                 "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
                 // Mensajería, Control Remoto y Apps de Fondo No Autorizadas
@@ -1216,6 +1327,7 @@ namespace LayvelGuard
                 "Steam", "SteamService", "steamwebhelper", "MinecraftLauncher", "EpicGamesLauncher",
                 "uTorrent", "BitTorrent", "qBittorrent", "Ares", "PopcornTime", "Stremio",
                 "firefox", "opera", "operagx", "brave", "vivaldi", "tor", "yandex", "ucbrowser",
+                "soffice.bin", "soffice", "wps", "wpscloud", "wpscenter", "onlyoffice", "abiword", "foxitreader",
                 "AvastUI", "AVGUI", "ccleaner", "mcshield", "bdagent",
                 "HD-Player", "bluestacks", "dnplayer", "Nox", "MEmu", "CheatEngine", "StumbleGuys", "TLauncher",
                 "Discord", "Telegram", "WhatsApp", "AnyDesk", "TeamViewer", "Parsec",
@@ -1287,6 +1399,86 @@ namespace LayvelGuard
                 if (File.Exists(diaLnk)) File.Delete(diaLnk);
                 if (File.Exists(umaxLnk)) File.Delete(umaxLnk);
             } catch {}
+        }
+
+        public static void EnforceDefaultApplications(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("--> Asignando aplicaciones predeterminadas (MS Office & Google Chrome)...");
+
+                // 1. Google Chrome como Navegador Predeterminado (HTTP, HTTPS, HTML)
+                try {
+                    string chromeProgId = "ChromeHTML";
+                    string chromeExe = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+                    if (!File.Exists(chromeExe)) chromeExe = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
+
+                    if (File.Exists(chromeExe))
+                    {
+                        string[] protocols = new string[] { "http", "https" };
+                        foreach (string proto in protocols)
+                        {
+                            using (RegistryKey k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\" + proto + @"\UserChoice"))
+                            {
+                                if (k != null) k.SetValue("ProgId", chromeProgId, RegistryValueKind.String);
+                            }
+                        }
+
+                        string[] webExts = new string[] { ".html", ".htm" };
+                        foreach (string ext in webExts)
+                        {
+                            using (RegistryKey k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + ext + @"\UserChoice"))
+                            {
+                                if (k != null) k.SetValue("ProgId", chromeProgId, RegistryValueKind.String);
+                            }
+                        }
+                    }
+                } catch {}
+
+                // 2. Asociaciones de MS Office (.docx, .doc, .xlsx, .xls, .pptx, .ppt, .rtf, .csv)
+                try {
+                    Dictionary<string, string> officeAssocs = new Dictionary<string, string>() {
+                        { ".docx", "Word.Document.12" },
+                        { ".doc", "Word.Document.8" },
+                        { ".rtf", "Word.Document.8" },
+                        { ".xlsx", "Excel.Sheet.12" },
+                        { ".xls", "Excel.Sheet.8" },
+                        { ".csv", "Excel.CSV" },
+                        { ".pptx", "PowerPoint.Show.12" },
+                        { ".ppt", "PowerPoint.Show.8" }
+                    };
+
+                    foreach (KeyValuePair<string, string> kv in officeAssocs)
+                    {
+                        string ext = kv.Key;
+                        string progId = kv.Value;
+                        try {
+                            using (RegistryKey k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + ext + @"\UserChoice"))
+                            {
+                                if (k != null) k.SetValue("ProgId", progId, RegistryValueKind.String);
+                            }
+                        } catch {}
+                    }
+                } catch {}
+
+                // 3. Fallback en nivel de sistema con assoc y ftype
+                try {
+                    string cmdAssoc = 
+                        "assoc .docx=Word.Document.12 & assoc .doc=Word.Document.8 & assoc .rtf=Word.Document.8 & " +
+                        "assoc .xlsx=Excel.Sheet.12 & assoc .xls=Excel.Sheet.8 & assoc .csv=Excel.CSV & " +
+                        "assoc .pptx=PowerPoint.Show.12 & assoc .ppt=PowerPoint.Show.8 & " +
+                        "assoc .html=ChromeHTML & assoc .htm=ChromeHTML";
+                    
+                    ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/c \"" + cmdAssoc + "\"");
+                    psi.CreateNoWindow = true;
+                    psi.UseShellExecute = false;
+                    Process p = Process.Start(psi);
+                    if (p != null) p.WaitForExit(3000);
+                } catch {}
+
+                if (logger != null) logger("--> Aplicaciones por defecto (Office y Chrome) forzadas correctamente.");
+            } catch (Exception ex) {
+                if (logger != null) logger("   [!] Error al forzar apps por defecto: " + ex.Message);
+            }
         }
 
         public const int SPI_SETDESKWALLPAPER = 20;
@@ -2286,8 +2478,8 @@ namespace LayvelGuard
         private Panel panelActions, panelStatus;
 
         // Status items & controls
-        private Label badgeBlockWeb, badgeAccounts, badgeEmailPurge, badgeWallpaper, badgeService, badgeShortcuts, badgeUninstall;
-        private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleEmailPurge, btnToggleWallpaper, btnToggleService, btnToggleShortcuts, btnToggleUninstall;
+        private Label badgeBlockWeb, badgeAccounts, badgeEmailPurge, badgeWallpaper, badgeService, badgeShortcuts, badgeUninstall, badgeMouse;
+        private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleEmailPurge, btnToggleWallpaper, btnToggleService, btnToggleShortcuts, btnToggleUninstall, btnToggleMouse;
 
         private System.Windows.Forms.Timer telemetryTimer;
 
@@ -2550,7 +2742,16 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnPurgeEmails);
 
-            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 484);
+            Button btnDefaultApps = CreateActionButton("[12] Aplicaciones por Defecto (Office / Chrome)", Color.FromArgb(30, 41, 59), 484);
+            btnDefaultApps.Click += (s, e) => RunAsync(() => {
+                Log("Iniciando asignación de aplicaciones por defecto...");
+                Program.EnforceDefaultApplications((msg) => Log(msg));
+                RefreshStatusBadges();
+                Log("Asignación de aplicaciones por defecto finalizada.");
+            });
+            leftPanel.Controls.Add(btnDefaultApps);
+
+            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 528);
             btnUnblock.Click += (s, e) => RunAsync(() => {
                 Log("Desbloqueando y restaurando configuraciones...");
                 Program.UnblockEquipment();
@@ -2650,6 +2851,11 @@ namespace LayvelGuard
             CreateStatusRow(panelStatus, "Selector y Desinstalador de Aplicaciones:", y, out badgeUninstall, out btnToggleUninstall,
                 (s, e) => OpenUninstallManager(),
                 (s, e) => Log("Selector de aplicaciones cerrado."));
+            y += 60;
+
+            CreateStatusRow(panelStatus, "Bloqueo Personalizacion y Tamaño de Mouse:", y, out badgeMouse, out btnToggleMouse,
+                (s, e) => RunAsync(() => { Program.BlockMouseCustomization((msg) => Log(msg)); RefreshStatusBadges(); }),
+                (s, e) => RunAsync(() => { Program.AllowMouseCustomization((msg) => Log(msg)); RefreshStatusBadges(); }));
 
             // 5. Footer Progress
             progressBar = new ProgressBar();
@@ -2842,6 +3048,21 @@ namespace LayvelGuard
 
                     // 6. Desinstalación / Filtro Procesos
                     UpdateBadge(badgeUninstall, btnToggleUninstall, true, "SELECTOR INTERACTIVO", "PAUSADO");
+
+                    // 7. Bloqueo de Mouse
+                    bool isMouseBlocked = false;
+                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop"))
+                    {
+                        if (k != null && k.GetValue("NoChangingMousePointers") != null) isMouseBlocked = true;
+                    }
+                    if (!isMouseBlocked)
+                    {
+                        using (RegistryKey k = Registry.CurrentUser.OpenSubKey(@"Software\Policies\Microsoft\Windows\Control Panel\Desktop"))
+                        {
+                            if (k != null && k.GetValue("NoChangingMousePointers") != null) isMouseBlocked = true;
+                        }
+                    }
+                    UpdateBadge(badgeMouse, btnToggleMouse, isMouseBlocked, "ACTIVADO", "DESACTIVADO");
                 } catch {}
             });
         }
@@ -2938,7 +3159,8 @@ namespace LayvelGuard
             SetProgress(45);
             Log("[3/8] Aplicando bloqueo web y restricción de perfiles de navegación...");
             Program.DoBlockGames();
-            Log("      -> Bloqueo Web, DoH y restricción de perfiles de Chrome/Edge aplicados.");
+            Program.BlockMouseCustomization((msg) => Log("      " + msg));
+            Log("      -> Bloqueo Web, DoH, mouse y perfiles aplicados.");
 
             SetProgress(55);
             Log("[4/8] Eliminando datos residuales de Roblox y Minecraft...");
@@ -2953,13 +3175,17 @@ namespace LayvelGuard
             Program.EnsureDefaultInstitutionsExist();
             Program.EnforceInstitutionalWallpaper((msg) => Log("      " + msg));
 
-            SetProgress(85);
-            Log("[7/8] Generando accesos directos institucionales...");
+            SetProgress(80);
+            Log("[7/9] Generando accesos directos institucionales...");
             Program.CreateShortcuts();
             Log("      -> Accesos directos institucionales verificados.");
 
+            SetProgress(90);
+            Log("[8/9] Forzando aplicaciones por defecto (MS Office & Google Chrome)...");
+            Program.EnforceDefaultApplications((msg) => Log("      " + msg));
+
             SetProgress(95);
-            Log("[8/8] Registrando servicio telemétrico silencioso LayvelGuard...");
+            Log("[9/9] Registrando servicio telemétrico silencioso LayvelGuard...");
             Program.InstallStartupTask(true);
             Log("      -> Servicio telemétrico registrado al encender Windows.");
 

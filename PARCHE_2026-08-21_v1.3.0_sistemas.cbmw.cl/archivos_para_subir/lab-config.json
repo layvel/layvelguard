@@ -7,6 +7,8 @@
   "block_roblox_app": true,
   "block_steam": true,
   "block_minecraft": true,
+  "block_unauthorized_office": true,
+  "enforce_default_apps": true,
   "clean_downloads": true,
   "clean_downloads_days": 7,
   "clean_desktop_clutter": true,

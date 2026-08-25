@@ -1,16 +1,22 @@
 {
   "app_name": "LayvelGuard Pro",
-  "script_version": "1.4.0",
+  "script_version": "1.5.0",
   "enabled": true,
   "mode": "enforce",
   "block_roblox_web": true,
   "block_steam": true,
   "block_minecraft": true,
+  "block_unauthorized_office": true,
+  "enforce_default_apps": true,
+  "default_browser": "chrome.exe",
+  "default_office": "ms_office",
   "clean_downloads": true,
+  "block_mouse_customization": true,
   "prohibited_keywords": [
     "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
     "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
     "firefox", "opera", "operagx", "brave", "vivaldi", "tor browser", "yandex", "uc browser", "waterfox", "chromium",
+    "libreoffice", "openoffice", "wps office", "wps", "onlyoffice", "freeoffice", "polaris office", "abiword", "foxit",
     "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
     "bluestacks", "ldplayer", "nox", "memu", "cheat engine", "stumble guys", "tlauncher", "lunar client", "feather client",
     "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec"

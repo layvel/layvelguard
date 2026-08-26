@@ -127,6 +127,22 @@ namespace LayvelGuard
             try {
                 using (WebClient wc = new WebClient())
                 {
+                    wc.Headers[HttpRequestHeader.UserAgent] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
+                    wc.Headers["Cache-Control"] = "no-cache";
+                    wc.Headers["Pragma"] = "no-cache";
+                    string atom = wc.DownloadString("https://github.com/layvel/layvelguard/commits/main.atom");
+                    int idx = atom.IndexOf("Commit/");
+                    if (idx != -1 && atom.Length >= idx + 7 + 40)
+                    {
+                        string sha = atom.Substring(idx + 7, 40).Trim();
+                        if (sha.Length == 40) return sha;
+                    }
+                }
+            } catch {}
+
+            try {
+                using (WebClient wc = new WebClient())
+                {
                     wc.Headers[HttpRequestHeader.UserAgent] = "LayvelGuard-Agent/" + CURRENT_VERSION;
                     string json = wc.DownloadString(GITHUB_REPO_API);
                     string sha = ExtractJsonValue(json, "sha");

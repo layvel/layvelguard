@@ -1,18 +1,18 @@
-# MANIFIESTO DE PARCHE - PARCHE_2026-08-20_v3.4.0
+# MANIFIESTO DE PARCHE - PARCHE_2026-08-26_v1.5.0
 
-- **Nombre del Parche:** `2026-08-20_agente_cbmw_v3.4.0`
-- **Fecha:** 20/08/2026
-- **Versión:** 3.4.0
+- **Nombre del Parche:** `2026-08-26_layvelguard_v1.5.0_sistemas.cbmw.cl`
+- **Fecha:** 26/08/2026
+- **Versión:** 1.5.0
 - **Novedades y Cambios:**
-  1. **Rediseño de Interfaz Gráfica con Pestañas:**
-     - **Pestaña 1 (Mantenimiento y Consola):** Ejecución en 1-clic con la consola de ejecución en vivo corregida y rediseñada.
-     - **Pestaña 2 (Estatus del Equipo & Switches):** Panel interactivo con indicadores en vivo `[ 🟢 ACTIVADO ]` / `[ 🔴 DESACTIVADO ]` para cada protección del sistema, con **botones de interruptor individual (On/Off)** para activar o desactivar cada función por separado.
-  2. **Bloqueo Web Completo de Steam:**
-     - Bloqueo directo de `store.steampowered.com`, `steamcommunity.com` y patrones `*steam*` en Chrome/Edge (`URLBlocklist`) y en el archivo `hosts`.
-  3. **Servicio Telemétrico en Segundo Plano (Detector de Encendido):**
-     - Registra la tarea `CBMW_Heartbeat_Daemon` que corre silenciosamente sin mostrar ventanas al encender Windows. Envía latidos telemétricos cada 3 minutos a `sistemas.cbmw.cl`.
-  4. **Apagado Remoto desde el Dashboard Web:**
-     - Botón **"⚡ Apagar PC"** en `dashboard_lab.php` que permite apagar remotamente cualquier equipo dejado encendido (con la pantalla apagada) o en caso de uso no autorizado.
+  1. **Bloqueo Total de Personalización y Tamaño del Mouse:**
+     - Restricción estricta (`NoChangingMousePointers`) que impide modificar esquemas de cursor o aumentar el tamaño del puntero desde el Panel de Control y Configuración de Windows.
+     - Forzado en tiempo real de punteros Aero predeterminados estándar de 32px y recarga Win32 `SPI_SETCURSORS` sin reiniciar.
+     - Nuevo botón de acceso rápido **`[13] Bloquear Personalizacion / Tamano Mouse`** en el menú principal (Pestaña 1).
+     - Nuevo interruptor y monitor en vivo en la **Pestaña 2 (Estatus del Equipo & Switches)**.
+  2. **Actualización de Configuración Global:**
+     - Incorporación del parámetro `"block_mouse_customization": true` en `config.json` y `lab-config.json`.
+  3. **Descarga e Instalador Remoto con Anti-Caché:**
+     - `bat/index.php` y `descargar_e_instalar_cbmw.bat` actualizados con parámetros anti-caché (`?v=%RANDOM%`) para garantizar la descarga inmediata de la versión v1.5.0 más reciente.
 
 ---
 
@@ -22,14 +22,13 @@
 archivos_para_subir/
 ├── api/
 │   └── lab/
-│       ├── dashboard.php            <-- Dashboard web con botón Apagar PC Remoto
-│       └── reporte.php              <-- Receptor telemétrico y despachador de comandos
+│       ├── dashboard.php            <-- Dashboard web con telemetría y control
+│       └── reporte.php              <-- Receptor telemétrico y despachador
 ├── bat/
-│   ├── index.php                    <-- Descarga directa /bat
-│   ├── descargar_e_instalar_cbmw.bat
-│   └── Menu_Administracion_CBMW.exe <-- Ejecutable C# Nativo v3.4.0 compilado
+│   ├── index.php                    <-- Descarga directa /bat con anti-caché
+│   ├── descargar_e_instalar_cbmw.bat<-- Instalador remoto v1.5.0
+│   └── LayvelGuard.exe              <-- Binario compilado nativo C# v1.5.0
 ├── lab/
-│   ├── agente_cbmw_global.ps1       <-- Agente PowerShell v3.4.0
-│   └── Menu_Administracion_CBMW.exe
-└── lab-config.json                  <-- Configuración global v3.4.0
+│   └── LayvelGuard.exe              <-- Binario nativo v1.5.0 para clientes
+└── lab-config.json                  <-- Configuración global v1.5.0
 ```

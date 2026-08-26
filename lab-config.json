@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "mode": "enforce",
-  "script_version": "1.5.0",
+  "script_version": "1.5.1",
   "server_url": "https://sistemas.cbmw.cl",
   "block_roblox_web": true,
   "block_roblox_app": true,

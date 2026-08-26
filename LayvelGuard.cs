@@ -14,8 +14,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("LayvelGuard Pro")]
 [assembly: AssemblyDescription("LayvelGuard Control & Maintenance Agent")]
 [assembly: AssemblyProduct("LayvelGuard Pro")]
-[assembly: AssemblyVersion("1.5.0.0")]
-[assembly: AssemblyFileVersion("1.5.0.0")]
+[assembly: AssemblyVersion("1.5.1.0")]
+[assembly: AssemblyFileVersion("1.5.1.0")]
 
 namespace LayvelGuard
 {
@@ -29,7 +29,7 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.5.0";
+        public const string CURRENT_VERSION = "1.5.1";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
         public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
@@ -2676,11 +2676,11 @@ namespace LayvelGuard
             btnFull.Click += (s, e) => RunAsync(DoFullMaintenance);
             leftPanel.Controls.Add(btnFull);
 
-            Button btnStatusNav = CreateActionButton("[1] Ver Estatus y Switches On/Off", Color.FromArgb(59, 130, 246), 44);
+            Button btnStatusNav = CreateActionButton("[1] Ver Estatus y Switches On/Off", Color.FromArgb(59, 130, 246), 37);
             btnStatusNav.Click += (s, e) => SwitchTab(false);
             leftPanel.Controls.Add(btnStatusNav);
 
-            Button btnStartup = CreateActionButton("[2] Servicio Telemetrico de Encendido", Color.FromArgb(30, 41, 59), 88);
+            Button btnStartup = CreateActionButton("[2] Servicio Telemetrico de Encendido", Color.FromArgb(30, 41, 59), 74);
             btnStartup.Click += (s, e) => RunAsync(() => {
                 Log("Configurando servicio telemétrico silencioso de encendido...");
                 Program.InstallStartupTask(true);
@@ -2689,11 +2689,11 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnStartup);
 
-            Button btnUninstallProcs = CreateActionButton("[3] Selector y Desinstalador de Apps", Color.FromArgb(30, 41, 59), 132);
+            Button btnUninstallProcs = CreateActionButton("[3] Selector y Desinstalador de Apps", Color.FromArgb(30, 41, 59), 111);
             btnUninstallProcs.Click += (s, e) => OpenUninstallManager();
             leftPanel.Controls.Add(btnUninstallProcs);
 
-            Button btnBlock = CreateActionButton("[4] Bloquear Web & Perfiles (Steam/Roblox)", Color.FromArgb(30, 41, 59), 176);
+            Button btnBlock = CreateActionButton("[4] Bloquear Web & Perfiles (Steam/Roblox)", Color.FromArgb(30, 41, 59), 148);
             btnBlock.Click += (s, e) => RunAsync(() => {
                 Log("Aplicando directivas de bloqueo web y restricción de perfiles de navegadores...");
                 Program.DoBlockGames();
@@ -2702,7 +2702,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnBlock);
 
-            Button btnAccounts = CreateActionButton("[5] Bloquear Cuentas Microsoft", Color.FromArgb(30, 41, 59), 220);
+            Button btnAccounts = CreateActionButton("[5] Bloquear Cuentas Microsoft", Color.FromArgb(30, 41, 59), 185);
             btnAccounts.Click += (s, e) => RunAsync(() => {
                 Log("Restringiendo inicio con cuentas Microsoft/Escuela...");
                 Program.EnforceLocalAccountsOnly();
@@ -2711,11 +2711,11 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnAccounts);
 
-            Button btnWallpaper = CreateActionButton("[6] Perfiles Institucionales (Fondos / Logos)", Color.FromArgb(30, 41, 59), 264);
+            Button btnWallpaper = CreateActionButton("[6] Perfiles Institucionales (Fondos / Logos)", Color.FromArgb(30, 41, 59), 222);
             btnWallpaper.Click += (s, e) => OpenInstitutionSelector();
             leftPanel.Controls.Add(btnWallpaper);
 
-            Button btnShortcuts = CreateActionButton("[7] Accesos Directos Institucionales", Color.FromArgb(30, 41, 59), 308);
+            Button btnShortcuts = CreateActionButton("[7] Accesos Directos Institucionales", Color.FromArgb(30, 41, 59), 259);
             btnShortcuts.Click += (s, e) => RunAsync(() => {
                 Log("Creando accesos directos institucionales...");
                 Program.CreateShortcuts();
@@ -2724,7 +2724,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnShortcuts);
 
-            Button btnResetBrowsers = CreateActionButton("[8] Reset Radical Navegadores (User Data)", Color.FromArgb(30, 41, 59), 352);
+            Button btnResetBrowsers = CreateActionButton("[8] Reset Radical Navegadores (User Data)", Color.FromArgb(30, 41, 59), 296);
             btnResetBrowsers.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando Reset Radical de User Data en Chrome y Edge...");
                 Program.ResetBrowserUserData((msg) => Log(msg));
@@ -2732,7 +2732,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnResetBrowsers);
 
-            Button btnCleanFiles = CreateActionButton("[9] Limpiar Descargas y Basura Escritorio", Color.FromArgb(30, 41, 59), 396);
+            Button btnCleanFiles = CreateActionButton("[9] Limpiar Descargas y Basura Escritorio", Color.FromArgb(30, 41, 59), 333);
             btnCleanFiles.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando limpieza de Descargas y accesos del Escritorio...");
                 Program.CleanDownloadsAndDesktop((msg) => Log(msg));
@@ -2740,7 +2740,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnCleanFiles);
 
-            Button btnPurgeEmails = CreateActionButton("[11] Purga Radical Cuentas de Correo", Color.FromArgb(30, 41, 59), 440);
+            Button btnPurgeEmails = CreateActionButton("[11] Purga Radical Cuentas de Correo", Color.FromArgb(30, 41, 59), 370);
             btnPurgeEmails.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando purga radical de cuentas de correo y desvinculación...");
                 Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg));
@@ -2749,7 +2749,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnPurgeEmails);
 
-            Button btnDefaultApps = CreateActionButton("[12] Aplicaciones por Defecto (Office / Chrome)", Color.FromArgb(30, 41, 59), 484);
+            Button btnDefaultApps = CreateActionButton("[12] Aplicaciones por Defecto (Office / Chrome)", Color.FromArgb(30, 41, 59), 407);
             btnDefaultApps.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando asignación de aplicaciones por defecto...");
                 Program.EnforceDefaultApplications((msg) => Log(msg));
@@ -2758,7 +2758,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnDefaultApps);
 
-            Button btnMouseBlock = CreateActionButton("[13] Bloquear Personalizacion / Tamano Mouse", Color.FromArgb(30, 41, 59), 528);
+            Button btnMouseBlock = CreateActionButton("[13] Bloquear Personalizacion / Tamano Mouse", Color.FromArgb(30, 41, 59), 444);
             btnMouseBlock.Click += (s, e) => RunAsync(() => {
                 Log("Aplicando bloqueo de personalización y tamaño del mouse...");
                 Program.BlockMouseCustomization((msg) => Log(msg));
@@ -2767,7 +2767,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnMouseBlock);
 
-            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 572);
+            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 481);
             btnUnblock.Click += (s, e) => RunAsync(() => {
                 Log("Desbloqueando y restaurando configuraciones...");
                 Program.UnblockEquipment();
@@ -2932,7 +2932,15 @@ namespace LayvelGuard
                             }
                             else
                             {
-                                Log(string.Format("-> LayvelGuard se encuentra en la versión más reciente en GitHub (v{0}).", remoteVer));
+                                Log(string.Format("-> Forzando reinstalación / actualización desde GitHub (v{0})...", remoteVer));
+                                bool isUpdating = Program.CheckAndUpdateSelf(true);
+                                if (isUpdating)
+                                {
+                                    Log("-> Actualización forzada completada desde GitHub. Reiniciando...");
+                                    Thread.Sleep(1500);
+                                    Application.Exit();
+                                    return;
+                                }
                                 Program.EnsureDefaultInstitutionsExist();
                             }
                         }
@@ -3113,14 +3121,14 @@ namespace LayvelGuard
             btn.Text = text;
             btn.BackColor = bg;
             btn.ForeColor = Color.White;
-            btn.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            btn.Font = new Font("Segoe UI", 8.8f, FontStyle.Bold);
             btn.FlatStyle = FlatStyle.Flat;
             btn.FlatAppearance.BorderSize = 0;
             btn.Location = new Point(0, top);
-            btn.Size = new Size(350, 38);
+            btn.Size = new Size(350, 34);
             btn.Cursor = Cursors.Hand;
             btn.TextAlign = ContentAlignment.MiddleLeft;
-            btn.Padding = new Padding(10, 0, 0, 0);
+            btn.Padding = new Padding(8, 0, 0, 0);
             return btn;
         }
 

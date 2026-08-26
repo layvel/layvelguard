@@ -2548,8 +2548,8 @@ namespace LayvelGuard
         private void InitializeComponent()
         {
             this.Text = "LAYVELGUARD PRO - CONTROL & MAINTENANCE AGENT (v" + Program.CURRENT_VERSION + ")";
-            this.Size = new Size(1040, 720);
-            this.MinimumSize = new Size(980, 680);
+            this.Size = new Size(1060, 750);
+            this.MinimumSize = new Size(1000, 700);
             this.BackColor = Color.FromArgb(15, 23, 42); // Slate 900
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -2661,7 +2661,7 @@ namespace LayvelGuard
 
             Panel leftPanel = new Panel();
             leftPanel.Location = new Point(20, 10);
-            leftPanel.Size = new Size(350, 520);
+            leftPanel.Size = new Size(365, 540);
             leftPanel.BackColor = Color.Transparent;
             leftPanel.AutoScroll = true;
 
@@ -2751,11 +2751,21 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnDefaultApps);
 
-            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 528);
+            Button btnMouseBlock = CreateActionButton("[13] Bloquear Personalizacion / Tamano Mouse", Color.FromArgb(30, 41, 59), 528);
+            btnMouseBlock.Click += (s, e) => RunAsync(() => {
+                Log("Aplicando bloqueo de personalización y tamaño del mouse...");
+                Program.BlockMouseCustomization((msg) => Log(msg));
+                RefreshStatusBadges();
+                Log("Personalización y tamaño de mouse bloqueados.");
+            });
+            leftPanel.Controls.Add(btnMouseBlock);
+
+            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 572);
             btnUnblock.Click += (s, e) => RunAsync(() => {
                 Log("Desbloqueando y restaurando configuraciones...");
                 Program.UnblockEquipment();
                 Program.AllowMicrosoftAccounts();
+                Program.AllowMouseCustomization();
                 Program.InstallStartupTask(false);
                 RefreshStatusBadges();
                 Log("Equipo desbloqueado y restaurado.");
@@ -2766,8 +2776,8 @@ namespace LayvelGuard
 
             // Console Box (Derecha)
             Panel rightPanel = new Panel();
-            rightPanel.Location = new Point(390, 10);
-            rightPanel.Size = new Size(610, 520);
+            rightPanel.Location = new Point(400, 10);
+            rightPanel.Size = new Size(610, 540);
             rightPanel.BackColor = Color.FromArgb(30, 41, 59);
             rightPanel.Padding = new Padding(12);
 
@@ -2806,6 +2816,7 @@ namespace LayvelGuard
             panelStatus.Dock = DockStyle.Fill;
             panelStatus.BackColor = Color.FromArgb(15, 23, 42);
             panelStatus.Padding = new Padding(25);
+            panelStatus.AutoScroll = true;
             panelStatus.Visible = false;
 
             Label lblStatusTabTitle = new Label();

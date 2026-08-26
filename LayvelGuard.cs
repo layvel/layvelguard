@@ -8,7 +8,14 @@ using System.Windows.Forms;
 using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using Microsoft.Win32;
+
+[assembly: AssemblyTitle("LayvelGuard Pro")]
+[assembly: AssemblyDescription("LayvelGuard Control & Maintenance Agent")]
+[assembly: AssemblyProduct("LayvelGuard Pro")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 
 namespace LayvelGuard
 {

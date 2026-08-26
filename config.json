@@ -1,6 +1,6 @@
 {
   "app_name": "LayvelGuard Pro",
-  "script_version": "1.5.1",
+  "script_version": "1.6.0",
   "enabled": true,
   "mode": "enforce",
   "block_roblox_web": true,
@@ -12,6 +12,7 @@
   "default_office": "ms_office",
   "clean_downloads": true,
   "block_mouse_customization": true,
+  "block_wallpaper_customization": true,
   "prohibited_keywords": [
     "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
     "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
@@ -19,7 +20,8 @@
     "libreoffice", "openoffice", "wps office", "wps", "onlyoffice", "freeoffice", "polaris office", "abiword", "foxit",
     "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
     "bluestacks", "ldplayer", "nox", "memu", "cheat engine", "stumble guys", "tlauncher", "lunar client", "feather client",
-    "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec"
+    "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec",
+    "lively", "wallpaper engine", "rainmeter", "deskscapes", "bing wallpaper", "plastuer", "autodarkmode", "translucenttb", "chameleon"
   ],
   "shortcuts": [
     {

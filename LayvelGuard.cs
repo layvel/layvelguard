@@ -14,8 +14,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("LayvelGuard Pro")]
 [assembly: AssemblyDescription("LayvelGuard Control & Maintenance Agent")]
 [assembly: AssemblyProduct("LayvelGuard Pro")]
-[assembly: AssemblyVersion("1.5.1.0")]
-[assembly: AssemblyFileVersion("1.5.1.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyFileVersion("1.6.0.0")]
 
 namespace LayvelGuard
 {
@@ -29,7 +29,7 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.5.1";
+        public const string CURRENT_VERSION = "1.6.0";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
         public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
@@ -336,19 +336,17 @@ namespace LayvelGuard
             } catch {}
         }
 
-        private static void RunSilentBoot()
+        public static void RunSilentBoot()
         {
             try {
                 CleanInvalidAutoLogon();
                 InstallStartupTask();
                 DoBlockGames();
                 EnforceLocalAccountsOnly();
+                PurgeConnectedAccountsAndIdentities();
                 BlockMouseCustomization();
+                EnforceInstitutionalWallpaper();
                 
-                string cbmwFondo = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
-                if (!File.Exists(cbmwFondo)) EnsureDefaultInstitutionsExist();
-                if (File.Exists(cbmwFondo)) SetWallpapers(cbmwFondo);
-
                 string cbmwLogo = @"C:\LayvelGuard\Instituciones\CBMW\logo.png";
                 if (File.Exists(cbmwLogo)) SetUserProfilePicture(cbmwLogo);
 
@@ -597,6 +595,8 @@ namespace LayvelGuard
                 if (p != null) p.WaitForExit();
                 
                 AllowMouseCustomization();
+                AllowWallpaperCustomization();
+                AllowMicrosoftAccounts();
             } catch {}
         }
 
@@ -722,38 +722,111 @@ namespace LayvelGuard
         public static void PurgeConnectedAccountsAndIdentities(Action<string> logger = null)
         {
             try {
-                if (logger != null) logger("Iniciando purga radical de cuentas de correo y tokens vinculados...");
+                if (logger != null) logger("Iniciando purga radical de cuentas Microsoft/Escuela y desvinculacion total...");
 
-                // 1. Limpieza de Identidades MSA / AzureAD en Registro de Windows
-                if (logger != null) logger("   - Eliminando identidades registradas en el Registro de Windows (IdentityCRL / AccountSettings)...");
+                // 1. DESVINCULAR CUENTAS MICROSOFT DE PROFILELIST (Rompe la asociación MSA a nivel de Windows)
+                if (logger != null) logger("   - Desvinculando identidades MSA en HKLM ProfileList...");
                 try {
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\IdentityCRL", true))
+                    using (RegistryKey pList = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList", true))
                     {
-                        if (key != null)
+                        if (pList != null)
                         {
-                            try { key.DeleteSubKeyTree("UserExtendedProperties"); } catch {}
-                            try { key.DeleteSubKeyTree("Identities"); } catch {}
-                        }
-                    }
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\AccountSettings", true))
-                    {
-                        if (key != null)
-                        {
-                            try { key.DeleteSubKeyTree("Accounts"); } catch {}
-                        }
-                    }
-                    using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\IdentityCRL", true))
-                    {
-                        if (key != null)
-                        {
-                            try { key.DeleteSubKeyTree("UserExtendedProperties"); } catch {}
-                            try { key.DeleteSubKeyTree("Identities"); } catch {}
+                            foreach (string sidName in pList.GetSubKeyNames())
+                            {
+                                try {
+                                    using (RegistryKey sidKey = pList.OpenSubKey(sidName, true))
+                                    {
+                                        if (sidKey != null)
+                                        {
+                                            sidKey.DeleteValue("ConnectedIdentity", false);
+                                            sidKey.DeleteValue("InternetUserName", false);
+                                            sidKey.DeleteValue("InternetUID", false);
+                                            sidKey.DeleteValue("InternetProviderGUID", false);
+                                            sidKey.DeleteValue("InternetSid", false);
+                                            sidKey.DeleteValue("UserHome", false);
+                                        }
+                                    }
+                                } catch {}
+                            }
                         }
                     }
                 } catch {}
 
-                // 2. Limpieza de TokenBroker & BrokerPlugin en C:\Users\*
-                if (logger != null) logger("   - Purgando cachés de TokenBroker y BrokerPlugin en todos los perfiles de usuario...");
+                // 2. LIMPIEZA DE IDENTITYCRL, ACCOUNTSETTINGS, WORKPLACEJOIN Y OFFICE EN REGISTRO (HKCU, HKLM, HKEY_USERS)
+                if (logger != null) logger("   - Eliminando identidades registradas en IdentityCRL, AccountSettings y WorkplaceJoin...");
+                string[] regSubTrees = new string[] {
+                    @"Software\Microsoft\IdentityCRL",
+                    @"Software\Microsoft\Windows\CurrentVersion\AccountSettings",
+                    @"Software\Microsoft\Windows NT\CurrentVersion\WorkplaceJoin",
+                    @"Software\Microsoft\Office\16.0\Common\Identity"
+                };
+
+                // HKCU
+                foreach (string subTree in regSubTrees)
+                {
+                    try {
+                        using (RegistryKey k = Registry.CurrentUser.OpenSubKey(subTree, true))
+                        {
+                            if (k != null)
+                            {
+                                foreach (string sub in k.GetSubKeyNames())
+                                {
+                                    try { k.DeleteSubKeyTree(sub); } catch {}
+                                }
+                            }
+                        }
+                    } catch {}
+                }
+
+                // HKLM
+                string[] lmidKeys = new string[] {
+                    @"SOFTWARE\Microsoft\IdentityCRL",
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\AccountSettings",
+                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\WorkplaceJoin"
+                };
+                foreach (string subTree in lmidKeys)
+                {
+                    try {
+                        using (RegistryKey k = Registry.LocalMachine.OpenSubKey(subTree, true))
+                        {
+                            if (k != null)
+                            {
+                                foreach (string sub in k.GetSubKeyNames())
+                                {
+                                    try { k.DeleteSubKeyTree(sub); } catch {}
+                                }
+                            }
+                        }
+                    } catch {}
+                }
+
+                // HKEY_USERS (Todos los perfiles de usuario montados)
+                try {
+                    foreach (string uSid in Registry.Users.GetSubKeyNames())
+                    {
+                        if (uSid.StartsWith("S-1-5-21-") && !uSid.EndsWith("_Classes"))
+                        {
+                            foreach (string subTree in regSubTrees)
+                            {
+                                try {
+                                    using (RegistryKey k = Registry.Users.OpenSubKey(uSid + "\\" + subTree, true))
+                                    {
+                                        if (k != null)
+                                        {
+                                            foreach (string sub in k.GetSubKeyNames())
+                                            {
+                                                try { k.DeleteSubKeyTree(sub); } catch {}
+                                            }
+                                        }
+                                    }
+                                } catch {}
+                            }
+                        }
+                    }
+                } catch {}
+
+                // 3. PURGA TOTAL DE TOKENBROKER, CREDENTIALS, VAULT Y PAQUETES WAM EN C:\Users\*
+                if (logger != null) logger("   - Purgando TokenBroker, Credentials, Vault y paquetes WAM en perfiles de C:\\Users...");
                 try {
                     string systemDrive = Path.GetPathRoot(Environment.SystemDirectory);
                     string usersDir = Path.Combine(systemDrive, "Users");
@@ -762,32 +835,59 @@ namespace LayvelGuard
                         foreach (string userFolder in Directory.GetDirectories(usersDir))
                         {
                             string uName = Path.GetFileName(userFolder);
-                            if (uName.Equals("Public", StringComparison.OrdinalIgnoreCase) || uName.Equals("Default", StringComparison.OrdinalIgnoreCase) || uName.Equals("All Users", StringComparison.OrdinalIgnoreCase)) continue;
+                            if (uName.Equals("Public", StringComparison.OrdinalIgnoreCase) ||
+                                uName.Equals("Default", StringComparison.OrdinalIgnoreCase) ||
+                                uName.Equals("Default User", StringComparison.OrdinalIgnoreCase) ||
+                                uName.Equals("All Users", StringComparison.OrdinalIgnoreCase)) continue;
 
-                            string tokenCache = Path.Combine(userFolder, @"AppData\Local\Microsoft\TokenBroker\Cache");
-                            if (Directory.Exists(tokenCache))
+                            // TokenBroker (Limpieza completa de la carpeta)
+                            string tokenDir = Path.Combine(userFolder, @"AppData\Local\Microsoft\TokenBroker");
+                            if (Directory.Exists(tokenDir))
                             {
                                 try {
-                                    Directory.Delete(tokenCache, true);
-                                    if (logger != null) logger("     * TokenBroker limpiado en: " + uName);
+                                    Directory.Delete(tokenDir, true);
+                                    if (logger != null) logger("     * TokenBroker eliminado en: " + uName);
                                 } catch {}
                             }
 
+                            // Credentials & Vault
+                            string[] credDirs = new string[] {
+                                Path.Combine(userFolder, @"AppData\Local\Microsoft\Credentials"),
+                                Path.Combine(userFolder, @"AppData\Roaming\Microsoft\Credentials"),
+                                Path.Combine(userFolder, @"AppData\Local\Microsoft\Vault"),
+                                Path.Combine(userFolder, @"AppData\Roaming\Microsoft\Vault")
+                            };
+                            foreach (string cd in credDirs)
+                            {
+                                try {
+                                    if (Directory.Exists(cd)) Directory.Delete(cd, true);
+                                } catch {}
+                            }
+
+                            // Paquetes UWP de autenticación y Cloud Experience
                             string packagesDir = Path.Combine(userFolder, @"AppData\Local\Packages");
                             if (Directory.Exists(packagesDir))
                             {
-                                try {
-                                    foreach (string pkgDir in Directory.GetDirectories(packagesDir, "Microsoft.AAD.BrokerPlugin_*"))
-                                    {
-                                        try { Directory.Delete(pkgDir, true); } catch {}
-                                    }
-                                } catch {}
+                                string[] patterns = new string[] {
+                                    "Microsoft.AAD.BrokerPlugin_*",
+                                    "Microsoft.AccountsControl_*",
+                                    "Microsoft.Windows.CloudExperienceHost_*"
+                                };
+                                foreach (string pat in patterns)
+                                {
+                                    try {
+                                        foreach (string pkg in Directory.GetDirectories(packagesDir, pat))
+                                        {
+                                            try { Directory.Delete(pkg, true); } catch {}
+                                        }
+                                    } catch {}
+                                }
                             }
                         }
                     }
                 } catch {}
 
-                // 3. Purga de Credenciales de Windows Vault / Cmdkey
+                // 4. PURGA DE CREDENCIALES EN WINDOWS VAULT / CMDKEY
                 if (logger != null) logger("   - Escaneando y purgando credenciales guardadas en Windows Credential Manager...");
                 try {
                     ProcessStartInfo psi = new ProcessStartInfo("cmdkey", "/list");
@@ -809,7 +909,12 @@ namespace LayvelGuard
                                 if (idx != -1)
                                 {
                                     string target = line.Substring(idx + 1).Trim();
-                                    if (target.Contains("@") || target.StartsWith("MicrosoftAccount:", StringComparison.OrdinalIgnoreCase) || target.StartsWith("WindowsLive:", StringComparison.OrdinalIgnoreCase) || target.Contains("SSO"))
+                                    if (target.IndexOf("Microsoft", StringComparison.OrdinalIgnoreCase) != -1 ||
+                                        target.IndexOf("WindowsLive", StringComparison.OrdinalIgnoreCase) != -1 ||
+                                        target.IndexOf("Xbox", StringComparison.OrdinalIgnoreCase) != -1 ||
+                                        target.IndexOf("Xbl", StringComparison.OrdinalIgnoreCase) != -1 ||
+                                        target.IndexOf("SSO", StringComparison.OrdinalIgnoreCase) != -1 ||
+                                        target.Contains("@"))
                                     {
                                         try {
                                             ProcessStartInfo delPsi = new ProcessStartInfo("cmdkey", "/delete:\"" + target + "\"");
@@ -826,8 +931,8 @@ namespace LayvelGuard
                     }
                 } catch {}
 
-                // 4. Desactivación de cuentas locales creadas con formato de correo
-                if (logger != null) logger("   - Verificando si existen cuentas locales de Windows creadas con correos...");
+                // 5. DESACTIVAR CUENTAS LOCALES DE TIPO CORREO
+                if (logger != null) logger("   - Verificando si existen cuentas locales creadas con formato de correo...");
                 try {
                     ProcessStartInfo psi = new ProcessStartInfo("net", "user");
                     psi.CreateNoWindow = true;
@@ -861,17 +966,38 @@ namespace LayvelGuard
                     }
                 } catch {}
 
-                // 5. Reset Radical de Navegadores (User Data Chrome y Edge)
+                // 6. RESET RADICAL DE NAVEGADORES (Chrome y Edge)
                 if (logger != null) logger("   - Limpiando perfiles de Chrome y Edge para desvincular cuentas de correo en navegadores...");
                 ResetBrowserUserData(logger);
 
-                if (logger != null) logger("Purga radical de cuentas de correo y desvinculación completada con éxito.");
+                // 7. REINICIAR PROCESOS DE EXPERIENCIA SHELL Y MENÚ INICIO PARA FORZAR RECARGA
+                if (logger != null) logger("   - Refrescando la caché del Menú Inicio y Shell de Windows 11...");
+                try {
+                    string[] procsToKill = new string[] {
+                        "StartMenuExperienceHost",
+                        "ShellExperienceHost",
+                        "TokenBrokerHost",
+                        "SearchHost",
+                        "SystemSettings"
+                    };
+                    foreach (string procName in procsToKill)
+                    {
+                        try {
+                            foreach (Process pr in Process.GetProcessesByName(procName))
+                            {
+                                try { pr.Kill(); pr.WaitForExit(1000); } catch {}
+                            }
+                        } catch {}
+                    }
+                } catch {}
+
+                if (logger != null) logger("--> Purga radical y desvinculacion de cuentas Microsoft completada con éxito.");
             } catch (Exception ex) {
                 if (logger != null) logger("Aviso en purga de cuentas de correo: " + ex.Message);
             }
         }
 
-        public static void AllowMicrosoftAccounts()
+        public static void AllowMicrosoftAccounts(Action<string> logger = null)
         {
             try {
                 using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
@@ -881,6 +1007,163 @@ namespace LayvelGuard
                         key.DeleteValue("NoConnectedUser", false);
                     }
                 }
+                if (logger != null) logger("Restricción de cuentas Microsoft removida.");
+            } catch {}
+        }
+
+        public const int SPI_SETDESKWALLPAPER = 20;
+        public const int SPIF_UPDATEINIFILE = 0x01;
+        public const int SPIF_SENDCHANGE = 0x02;
+
+        public static void EnforceInstitutionalWallpaper(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("Aplicando bloqueo rígido de Fondo de Pantalla contra aplicaciones externas...");
+
+                // 1. Políticas ActiveDesktop (HKCU & HKLM)
+                using (RegistryKey actPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
+                {
+                    if (actPolicy != null) actPolicy.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
+                }
+                using (RegistryKey actPolicyHklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
+                {
+                    if (actPolicyHklm != null) actPolicyHklm.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
+                }
+
+                // 2. Políticas Personalization (HKCU & HKLM)
+                using (RegistryKey persPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Policies\Microsoft\Windows\Personalization"))
+                {
+                    if (persPolicy != null) persPolicy.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
+                }
+                using (RegistryKey persPolicyHklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\Windows\Personalization"))
+                {
+                    if (persPolicyHklm != null)
+                    {
+                        persPolicyHklm.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
+                        persPolicyHklm.SetValue("NoChangingLockScreen", 1, RegistryValueKind.DWord);
+                    }
+                }
+
+                // 3. Políticas Explorer (Deshabilita clic derecho 'Establecer como fondo')
+                using (RegistryKey expPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"))
+                {
+                    if (expPolicy != null)
+                    {
+                        expPolicy.SetValue("NoSetWallpaper", 1, RegistryValueKind.DWord);
+                        expPolicy.SetValue("NoActiveDesktopChanges", 1, RegistryValueKind.DWord);
+                        expPolicy.SetValue("NoActiveDesktop", 1, RegistryValueKind.DWord);
+                    }
+                }
+                using (RegistryKey expPolicyHklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"))
+                {
+                    if (expPolicyHklm != null) expPolicyHklm.SetValue("NoSetWallpaper", 1, RegistryValueKind.DWord);
+                }
+
+                // 4. Políticas System (Bloquea pestaña de fondo en configuración)
+                using (RegistryKey sysPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
+                {
+                    if (sysPolicy != null) sysPolicy.SetValue("NoDispBackgroundPage", 1, RegistryValueKind.DWord);
+                }
+
+                // 5. Cerrar aplicaciones de fondos de terceros (Lively, Wallpaper Engine, Rainmeter, etc.)
+                KillProhibitedProcesses();
+
+                // 6. Aplicar y fijar fondo institucional
+                string bgPath = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
+                if (!File.Exists(bgPath)) bgPath = @"C:\LayvelGuard\Instituciones\CBMW\fondo.jpg";
+                if (!File.Exists(bgPath))
+                {
+                    try {
+                        if (Directory.Exists(@"C:\LayvelGuard\Instituciones"))
+                        {
+                            foreach (string sub in Directory.GetDirectories(@"C:\LayvelGuard\Instituciones"))
+                            {
+                                string png = Path.Combine(sub, "fondo.png");
+                                string jpg = Path.Combine(sub, "fondo.jpg");
+                                if (File.Exists(png)) { bgPath = png; break; }
+                                if (File.Exists(jpg)) { bgPath = jpg; break; }
+                            }
+                        }
+                    } catch {}
+                }
+
+                if (File.Exists(bgPath))
+                {
+                    using (RegistryKey sysPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
+                    {
+                        if (sysPolicy != null)
+                        {
+                            sysPolicy.SetValue("Wallpaper", bgPath, RegistryValueKind.String);
+                            sysPolicy.SetValue("WallpaperStyle", "2", RegistryValueKind.String);
+                        }
+                    }
+                    using (RegistryKey sysPolicyHklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"))
+                    {
+                        if (sysPolicyHklm != null)
+                        {
+                            sysPolicyHklm.SetValue("Wallpaper", bgPath, RegistryValueKind.String);
+                            sysPolicyHklm.SetValue("WallpaperStyle", "2", RegistryValueKind.String);
+                        }
+                    }
+
+                    SetWallpapers(bgPath);
+                    if (logger != null) logger("   -> Fondo institucional fijado y protegido: " + Path.GetFileName(bgPath));
+                }
+
+                if (logger != null) logger("Bloqueo rígido de Fondo de Pantalla y Apps Externas activado con éxito.");
+            } catch (Exception ex) {
+                if (logger != null) logger("Aviso en bloqueo de fondo: " + ex.Message);
+            }
+        }
+
+        public static void AllowWallpaperCustomization(Action<string> logger = null)
+        {
+            try {
+                if (logger != null) logger("Removiendo bloqueo rígido de Fondo de Pantalla...");
+
+                string[] keys = new string[] {
+                    @"Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop",
+                    @"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer",
+                    @"Software\Microsoft\Windows\CurrentVersion\Policies\System",
+                    @"Software\Policies\Microsoft\Windows\Personalization"
+                };
+
+                foreach (string k in keys)
+                {
+                    try {
+                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(k, true))
+                        {
+                            if (key != null)
+                            {
+                                key.DeleteValue("NoChangingWallPaper", false);
+                                key.DeleteValue("NoDispBackgroundPage", false);
+                                key.DeleteValue("NoActiveDesktopChanges", false);
+                                key.DeleteValue("NoActiveDesktop", false);
+                                key.DeleteValue("NoSetWallpaper", false);
+                                key.DeleteValue("Wallpaper", false);
+                                key.DeleteValue("WallpaperStyle", false);
+                            }
+                        }
+                    } catch {}
+
+                    try {
+                        string hklmPath = k.StartsWith("Software", StringComparison.OrdinalIgnoreCase) ? "SOFTWARE" + k.Substring(8) : k;
+                        using (RegistryKey key = Registry.LocalMachine.OpenSubKey(hklmPath, true))
+                        {
+                            if (key != null)
+                            {
+                                key.DeleteValue("NoChangingWallPaper", false);
+                                key.DeleteValue("NoDispBackgroundPage", false);
+                                key.DeleteValue("NoSetWallpaper", false);
+                                key.DeleteValue("NoChangingLockScreen", false);
+                                key.DeleteValue("Wallpaper", false);
+                                key.DeleteValue("WallpaperStyle", false);
+                            }
+                        }
+                    } catch {}
+                }
+
+                if (logger != null) logger("Personalización de fondo de pantalla permitida.");
             } catch {}
         }
 
@@ -1140,7 +1423,7 @@ namespace LayvelGuard
                 // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
                 "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
                 // Mensajería, Control Remoto y Apps de Fondo No Autorizadas
-                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec", "lively", "wallpaper engine", "rainmeter", "deskscapes", "bing wallpaper"
+                "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec", "lively", "wallpaper engine", "rainmeter", "deskscapes", "bing wallpaper", "plastuer", "autodarkmode", "translucenttb", "chameleon"
             };
 
             List<string> customRules = LoadCustomProhibitedRules();
@@ -1354,7 +1637,7 @@ namespace LayvelGuard
                 "AvastUI", "AVGUI", "ccleaner", "mcshield", "bdagent",
                 "HD-Player", "bluestacks", "dnplayer", "Nox", "MEmu", "CheatEngine", "StumbleGuys", "TLauncher",
                 "Discord", "Telegram", "WhatsApp", "AnyDesk", "TeamViewer", "Parsec",
-                "Lively", "LivelyUI", "livelywp", "wallpaper32", "wallpaper64", "wallpaper", "Rainmeter", "DeskScapes", "BingWallpaperApp"
+                "Lively", "LivelyUI", "livelywp", "wallpaper32", "wallpaper64", "wallpaper", "webwallpaper32", "wallpaper32_vulkan", "wallpaper64_vulkan", "Rainmeter", "DeskScapes", "BingWallpaperApp", "Plastuer", "AutoDarkModeApp", "TranslucentTB", "Chameleon"
             };
 
             foreach (string cr in LoadCustomProhibitedRules())
@@ -1504,91 +1787,7 @@ namespace LayvelGuard
             }
         }
 
-        public const int SPI_SETDESKWALLPAPER = 20;
-        public const int SPIF_UPDATEINIFILE = 0x01;
-        public const int SPIF_SENDCHANGE = 0x02;
 
-        public static void EnforceInstitutionalWallpaper(Action<string> logger = null)
-        {
-            try {
-                if (logger != null) logger("Aplicando bloqueo rígido de Fondo de Pantalla contra aplicaciones externas...");
-
-                // 1. Políticas en Registro ActiveDesktop & System (Bloquea menú contextual y configuración)
-                using (RegistryKey actPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
-                {
-                    if (actPolicy != null)
-                    {
-                        actPolicy.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
-                    }
-                }
-
-                using (RegistryKey actPolicyHklm = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
-                {
-                    if (actPolicyHklm != null)
-                    {
-                        actPolicyHklm.SetValue("NoChangingWallPaper", 1, RegistryValueKind.DWord);
-                    }
-                }
-
-                using (RegistryKey sysPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
-                {
-                    if (sysPolicy != null)
-                    {
-                        sysPolicy.SetValue("NoDispBackgroundPage", 1, RegistryValueKind.DWord);
-                    }
-                }
-
-                using (RegistryKey expPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"))
-                {
-                    if (expPolicy != null)
-                    {
-                        expPolicy.SetValue("NoActiveDesktopChanges", 1, RegistryValueKind.DWord);
-                        expPolicy.SetValue("NoActiveDesktop", 1, RegistryValueKind.DWord);
-                    }
-                }
-
-                // 2. Determinar ruta de imagen de fondo institucional o por defecto
-                string bgPath = @"C:\LayvelGuard\Instituciones\CBMW\fondo.png";
-                if (!File.Exists(bgPath)) bgPath = @"C:\LayvelGuard\Instituciones\CBMW\fondo.jpg";
-                if (!File.Exists(bgPath))
-                {
-                    try {
-                        if (Directory.Exists(@"C:\LayvelGuard\Instituciones"))
-                        {
-                            foreach (string sub in Directory.GetDirectories(@"C:\LayvelGuard\Instituciones"))
-                            {
-                                string png = Path.Combine(sub, "fondo.png");
-                                string jpg = Path.Combine(sub, "fondo.jpg");
-                                if (File.Exists(png)) { bgPath = png; break; }
-                                if (File.Exists(jpg)) { bgPath = jpg; break; }
-                            }
-                        }
-                    } catch {}
-                }
-
-                if (File.Exists(bgPath))
-                {
-                    using (RegistryKey sysPolicy = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\System"))
-                    {
-                        if (sysPolicy != null)
-                        {
-                            sysPolicy.SetValue("Wallpaper", bgPath, RegistryValueKind.String);
-                            sysPolicy.SetValue("WallpaperStyle", "2", RegistryValueKind.String);
-                        }
-                    }
-
-                    // Forzar notificación a explorer.exe en vivo
-                    SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, bgPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                    if (logger != null) logger("   -> Fondo institucional aplicado y bloqueado en Registro: " + Path.GetFileName(bgPath));
-                }
-                else
-                {
-                    if (logger != null) logger("   -> Políticas de bloqueo de fondo aplicadas (sin imagen personalizada en C:\\LayvelGuard).");
-                }
-            } catch (Exception ex) {
-                if (logger != null) logger("Aviso en bloqueo de fondo: " + ex.Message);
-            }
-        }
 
         private static void CreateLnk(string lnkPath, string target, string args)
         {
@@ -2501,8 +2700,8 @@ namespace LayvelGuard
         private Panel panelActions, panelStatus;
 
         // Status items & controls
-        private Label badgeBlockWeb, badgeAccounts, badgeEmailPurge, badgeWallpaper, badgeService, badgeShortcuts, badgeUninstall, badgeMouse;
-        private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleEmailPurge, btnToggleWallpaper, btnToggleService, btnToggleShortcuts, btnToggleUninstall, btnToggleMouse;
+        private Label badgeBlockWeb, badgeAccounts, badgeEmailPurge, badgeWallpaper, badgeWallpaperLock, badgeService, badgeShortcuts, badgeUninstall, badgeMouse;
+        private Button btnToggleBlockWeb, btnToggleAccounts, btnToggleEmailPurge, btnToggleWallpaper, btnToggleWallpaperLock, btnToggleService, btnToggleShortcuts, btnToggleUninstall, btnToggleMouse;
 
         private System.Windows.Forms.Timer telemetryTimer;
 
@@ -2684,7 +2883,7 @@ namespace LayvelGuard
 
             Panel leftPanel = new Panel();
             leftPanel.Location = new Point(20, 10);
-            leftPanel.Size = new Size(365, 540);
+            leftPanel.Size = new Size(365, 550);
             leftPanel.BackColor = Color.Transparent;
             leftPanel.AutoScroll = true;
 
@@ -2692,11 +2891,11 @@ namespace LayvelGuard
             btnFull.Click += (s, e) => RunAsync(DoFullMaintenance);
             leftPanel.Controls.Add(btnFull);
 
-            Button btnStatusNav = CreateActionButton("[1] Ver Estatus y Switches On/Off", Color.FromArgb(59, 130, 246), 37);
+            Button btnStatusNav = CreateActionButton("[1] Ver Estatus y Switches On/Off", Color.FromArgb(59, 130, 246), 35);
             btnStatusNav.Click += (s, e) => SwitchTab(false);
             leftPanel.Controls.Add(btnStatusNav);
 
-            Button btnStartup = CreateActionButton("[2] Servicio Telemetrico de Encendido", Color.FromArgb(30, 41, 59), 74);
+            Button btnStartup = CreateActionButton("[2] Servicio Telemetrico de Encendido", Color.FromArgb(30, 41, 59), 70);
             btnStartup.Click += (s, e) => RunAsync(() => {
                 Log("Configurando servicio telemétrico silencioso de encendido...");
                 Program.InstallStartupTask(true);
@@ -2705,11 +2904,11 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnStartup);
 
-            Button btnUninstallProcs = CreateActionButton("[3] Selector y Desinstalador de Apps", Color.FromArgb(30, 41, 59), 111);
+            Button btnUninstallProcs = CreateActionButton("[3] Selector y Desinstalador de Apps", Color.FromArgb(30, 41, 59), 105);
             btnUninstallProcs.Click += (s, e) => OpenUninstallManager();
             leftPanel.Controls.Add(btnUninstallProcs);
 
-            Button btnBlock = CreateActionButton("[4] Bloquear Web & Perfiles (Steam/Roblox)", Color.FromArgb(30, 41, 59), 148);
+            Button btnBlock = CreateActionButton("[4] Bloquear Web & Perfiles (Steam/Roblox)", Color.FromArgb(30, 41, 59), 140);
             btnBlock.Click += (s, e) => RunAsync(() => {
                 Log("Aplicando directivas de bloqueo web y restricción de perfiles de navegadores...");
                 Program.DoBlockGames();
@@ -2718,20 +2917,38 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnBlock);
 
-            Button btnAccounts = CreateActionButton("[5] Bloquear Cuentas Microsoft", Color.FromArgb(30, 41, 59), 185);
+            Button btnAccounts = CreateActionButton("[5] Bloquear Cuentas Microsoft / Escuela", Color.FromArgb(30, 41, 59), 175);
             btnAccounts.Click += (s, e) => RunAsync(() => {
                 Log("Restringiendo inicio con cuentas Microsoft/Escuela...");
-                Program.EnforceLocalAccountsOnly();
+                Program.EnforceLocalAccountsOnly((msg) => Log(msg));
                 RefreshStatusBadges();
                 Log("Cuentas Microsoft bloqueadas.");
             });
             leftPanel.Controls.Add(btnAccounts);
 
-            Button btnWallpaper = CreateActionButton("[6] Perfiles Institucionales (Fondos / Logos)", Color.FromArgb(30, 41, 59), 222);
+            Button btnPurgeEmails = CreateActionButton("[11] Purgar y Desvincular Cuentas Puestas", Color.FromArgb(30, 41, 59), 210);
+            btnPurgeEmails.Click += (s, e) => RunAsync(() => {
+                Log("Iniciando purga radical de cuentas puestas y desvinculación total...");
+                Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg));
+                RefreshStatusBadges();
+                Log("Purga de cuentas puestas completada.");
+            });
+            leftPanel.Controls.Add(btnPurgeEmails);
+
+            Button btnWallpaper = CreateActionButton("[6] Perfiles Institucionales (Fondos / Logos)", Color.FromArgb(30, 41, 59), 245);
             btnWallpaper.Click += (s, e) => OpenInstitutionSelector();
             leftPanel.Controls.Add(btnWallpaper);
 
-            Button btnShortcuts = CreateActionButton("[7] Accesos Directos Institucionales", Color.FromArgb(30, 41, 59), 259);
+            Button btnWallpaperLock = CreateActionButton("[14] Bloquear Fondo y Apps Externas", Color.FromArgb(30, 41, 59), 280);
+            btnWallpaperLock.Click += (s, e) => RunAsync(() => {
+                Log("Aplicando bloqueo rígido de Fondo de Pantalla y cerrando apps externas...");
+                Program.EnforceInstitutionalWallpaper((msg) => Log(msg));
+                RefreshStatusBadges();
+                Log("Fondo de Pantalla protegido contra cambios y apps externas.");
+            });
+            leftPanel.Controls.Add(btnWallpaperLock);
+
+            Button btnShortcuts = CreateActionButton("[7] Accesos Directos Institucionales", Color.FromArgb(30, 41, 59), 315);
             btnShortcuts.Click += (s, e) => RunAsync(() => {
                 Log("Creando accesos directos institucionales...");
                 Program.CreateShortcuts();
@@ -2740,7 +2957,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnShortcuts);
 
-            Button btnResetBrowsers = CreateActionButton("[8] Reset Radical Navegadores (User Data)", Color.FromArgb(30, 41, 59), 296);
+            Button btnResetBrowsers = CreateActionButton("[8] Reset Radical Navegadores (User Data)", Color.FromArgb(30, 41, 59), 350);
             btnResetBrowsers.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando Reset Radical de User Data en Chrome y Edge...");
                 Program.ResetBrowserUserData((msg) => Log(msg));
@@ -2748,7 +2965,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnResetBrowsers);
 
-            Button btnCleanFiles = CreateActionButton("[9] Limpiar Descargas y Basura Escritorio", Color.FromArgb(30, 41, 59), 333);
+            Button btnCleanFiles = CreateActionButton("[9] Limpiar Descargas y Basura Escritorio", Color.FromArgb(30, 41, 59), 385);
             btnCleanFiles.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando limpieza de Descargas y accesos del Escritorio...");
                 Program.CleanDownloadsAndDesktop((msg) => Log(msg));
@@ -2756,16 +2973,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnCleanFiles);
 
-            Button btnPurgeEmails = CreateActionButton("[11] Purga Radical Cuentas de Correo", Color.FromArgb(30, 41, 59), 370);
-            btnPurgeEmails.Click += (s, e) => RunAsync(() => {
-                Log("Iniciando purga radical de cuentas de correo y desvinculación...");
-                Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg));
-                RefreshStatusBadges();
-                Log("Purga de cuentas de correo completada.");
-            });
-            leftPanel.Controls.Add(btnPurgeEmails);
-
-            Button btnDefaultApps = CreateActionButton("[12] Aplicaciones por Defecto (Office / Chrome)", Color.FromArgb(30, 41, 59), 407);
+            Button btnDefaultApps = CreateActionButton("[12] Aplicaciones por Defecto (Office / Chrome)", Color.FromArgb(30, 41, 59), 420);
             btnDefaultApps.Click += (s, e) => RunAsync(() => {
                 Log("Iniciando asignación de aplicaciones por defecto...");
                 Program.EnforceDefaultApplications((msg) => Log(msg));
@@ -2774,7 +2982,7 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnDefaultApps);
 
-            Button btnMouseBlock = CreateActionButton("[13] Bloquear Personalizacion / Tamano Mouse", Color.FromArgb(30, 41, 59), 444);
+            Button btnMouseBlock = CreateActionButton("[13] Bloquear Personalizacion / Tamano Mouse", Color.FromArgb(30, 41, 59), 455);
             btnMouseBlock.Click += (s, e) => RunAsync(() => {
                 Log("Aplicando bloqueo de personalización y tamaño del mouse...");
                 Program.BlockMouseCustomization((msg) => Log(msg));
@@ -2783,12 +2991,13 @@ namespace LayvelGuard
             });
             leftPanel.Controls.Add(btnMouseBlock);
 
-            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 481);
+            Button btnUnblock = CreateActionButton("[10] Desbloquear / Restaurar Equipo", Color.FromArgb(225, 29, 72), 490);
             btnUnblock.Click += (s, e) => RunAsync(() => {
                 Log("Desbloqueando y restaurando configuraciones...");
                 Program.UnblockEquipment();
                 Program.AllowMicrosoftAccounts();
                 Program.AllowMouseCustomization();
+                Program.AllowWallpaperCustomization();
                 Program.InstallStartupTask(false);
                 RefreshStatusBadges();
                 Log("Equipo desbloqueado y restaurado.");
@@ -2799,8 +3008,8 @@ namespace LayvelGuard
 
             // Console Box (Derecha)
             Panel rightPanel = new Panel();
-            rightPanel.Location = new Point(400, 10);
-            rightPanel.Size = new Size(610, 540);
+            rightPanel.Location = new Point(395, 10);
+            rightPanel.Size = new Size(630, 550);
             rightPanel.BackColor = Color.FromArgb(30, 41, 59);
             rightPanel.Padding = new Padding(12);
 
@@ -2862,9 +3071,14 @@ namespace LayvelGuard
                 (s, e) => RunAsync(() => { Program.AllowMicrosoftAccounts(); RefreshStatusBadges(); Log("Cuentas Microsoft permitidas."); }));
             y += 60;
 
-            CreateStatusRow(panelStatus, "Purga Radical de Cuentas de Correo / Tokens:", y, out badgeEmailPurge, out btnToggleEmailPurge,
+            CreateStatusRow(panelStatus, "Purga Radical de Cuentas Puestas (MSA / Tokens):", y, out badgeEmailPurge, out btnToggleEmailPurge,
                 (s, e) => RunAsync(() => { Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg)); RefreshStatusBadges(); }),
-                (s, e) => Log("Purga de cuentas de correo finalizada."));
+                (s, e) => RunAsync(() => { Program.PurgeConnectedAccountsAndIdentities((msg) => Log(msg)); RefreshStatusBadges(); }));
+            y += 60;
+
+            CreateStatusRow(panelStatus, "Bloqueo Fondo de Pantalla y Apps Externas (Lively/Engine):", y, out badgeWallpaperLock, out btnToggleWallpaperLock,
+                (s, e) => RunAsync(() => { Program.EnforceInstitutionalWallpaper((msg) => Log(msg)); RefreshStatusBadges(); }),
+                (s, e) => RunAsync(() => { Program.AllowWallpaperCustomization((msg) => Log(msg)); RefreshStatusBadges(); }));
             y += 60;
 
             CreateStatusRow(panelStatus, "Perfiles Institucionales (Fondos / Logos):", y, out badgeWallpaper, out btnToggleWallpaper,
@@ -3069,12 +3283,41 @@ namespace LayvelGuard
                     }
                     UpdateBadge(badgeAccounts, badgeAccounts != null ? btnToggleAccounts : null, isAccountsBlocked, "ACTIVADO", "DESACTIVADO");
 
-                    // 2b. Purga de Cuentas de Correo
-                    UpdateBadge(badgeEmailPurge, btnToggleEmailPurge, true, "EJECUTAR PURGA", "INACTIVO");
+                    // 2b. Purga de Cuentas Puestas
+                    if (badgeEmailPurge != null && btnToggleEmailPurge != null)
+                    {
+                        badgeEmailPurge.Text = "[ LISTO ]";
+                        badgeEmailPurge.ForeColor = Color.FromArgb(74, 222, 128);
+                        btnToggleEmailPurge.Text = "🔴 Purgar Cuentas Puestas";
+                        btnToggleEmailPurge.BackColor = Color.FromArgb(225, 29, 72);
+                        btnToggleEmailPurge.Tag = false;
+                    }
 
-                    // 3. Perfiles Institucionales
+                    // 3. Bloqueo de Fondo y Apps Externas
+                    bool isWallpaperLocked = false;
+                    using (RegistryKey k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
+                    {
+                        if (k != null && k.GetValue("NoChangingWallPaper") != null) isWallpaperLocked = true;
+                    }
+                    if (!isWallpaperLocked)
+                    {
+                        using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"))
+                        {
+                            if (k != null && k.GetValue("NoChangingWallPaper") != null) isWallpaperLocked = true;
+                        }
+                    }
+                    UpdateBadge(badgeWallpaperLock, btnToggleWallpaperLock, isWallpaperLocked, "ACTIVADO", "DESACTIVADO");
+
+                    // 3b. Perfiles Institucionales
                     bool isWallpaperSet = Directory.Exists(@"C:\LayvelGuard\Instituciones");
-                    UpdateBadge(badgeWallpaper, btnToggleWallpaper, isWallpaperSet, "GESTOR ACTIVO", "NO INSTALADO");
+                    if (badgeWallpaper != null && btnToggleWallpaper != null)
+                    {
+                        badgeWallpaper.Text = "[ GESTOR ACTIVO ]";
+                        badgeWallpaper.ForeColor = Color.FromArgb(74, 222, 128);
+                        btnToggleWallpaper.Text = "📂 Abrir Selector";
+                        btnToggleWallpaper.BackColor = Color.FromArgb(59, 130, 246);
+                        btnToggleWallpaper.Tag = false;
+                    }
 
                     // 4. Servicio Telemétrico
                     bool isServiceActive = false;
@@ -3141,7 +3384,7 @@ namespace LayvelGuard
             btn.FlatStyle = FlatStyle.Flat;
             btn.FlatAppearance.BorderSize = 0;
             btn.Location = new Point(0, top);
-            btn.Size = new Size(350, 34);
+            btn.Size = new Size(350, 32);
             btn.Cursor = Cursors.Hand;
             btn.TextAlign = ContentAlignment.MiddleLeft;
             btn.Padding = new Padding(8, 0, 0, 0);

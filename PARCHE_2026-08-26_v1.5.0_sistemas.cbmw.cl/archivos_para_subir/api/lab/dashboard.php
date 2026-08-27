@@ -175,8 +175,8 @@ $reportText = implode("\n", $reportLines);
     <div class="container">
         <div class="header">
             <div class="title">
-                <h1>🖥️ Monitoreo e Inventario de Software CBMW</h1>
-                <p>Auditoría Profunda y Apagado Remoto: sistemas.cbmw.cl</p>
+                <h1>🖥️ Monitoreo e Inventario CBMW (v1.6.1 - Azazel Patch 👿)</h1>
+                <p>Auditoría Profunda, Telemetría e Inventario: sistemas.cbmw.cl</p>
             </div>
             <div style="display:flex; align-items:center; gap:16px;">
                 <button onclick="openReportModal()" style="background:#2563eb; color:#ffffff; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; display:inline-flex; align-items:center; gap:8px; box-shadow:0 4px 6px -1px rgba(37,99,235,0.3);">
@@ -197,7 +197,7 @@ $reportText = implode("\n", $reportLines);
             </div>
             <div class="kpi-card">
                 <div class="kpi-title">Servicio Telemétrico</div>
-                <div class="kpi-value green">ACTIVO v3.4.0</div>
+                <div class="kpi-value green">ACTIVO v1.6.1 👿</div>
             </div>
         </div>
 

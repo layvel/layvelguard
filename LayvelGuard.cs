@@ -14,8 +14,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("LayvelGuard Pro")]
 [assembly: AssemblyDescription("LayvelGuard Control & Maintenance Agent")]
 [assembly: AssemblyProduct("LayvelGuard Pro")]
-[assembly: AssemblyVersion("1.6.0.0")]
-[assembly: AssemblyFileVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.6.1.0")]
+[assembly: AssemblyFileVersion("1.6.1.0")]
 
 namespace LayvelGuard
 {
@@ -29,7 +29,7 @@ namespace LayvelGuard
 
     public class Program
     {
-        public const string CURRENT_VERSION = "1.6.0";
+        public const string CURRENT_VERSION = "1.6.1";
         public const string APP_NAME = "LayvelGuard";
         public const string APP_DIR = @"C:\LayvelGuard";
         public const string INST_DIR = @"C:\LayvelGuard\Instituciones";
@@ -2918,7 +2918,7 @@ namespace LayvelGuard
             header.Controls.Add(picLogo);
 
             lblTitle = new Label();
-            lblTitle.Text = "LAYVELGUARD PRO";
+            lblTitle.Text = "LAYVELGUARD PRO v1.6.1 👿 AZAZEL EDITION";
             lblTitle.Font = new Font("Segoe UI", 13, FontStyle.Bold);
             lblTitle.ForeColor = Color.FromArgb(248, 250, 252);
             lblTitle.AutoSize = true;
@@ -2926,12 +2926,22 @@ namespace LayvelGuard
             header.Controls.Add(lblTitle);
 
             lblSubtitle = new Label();
-            lblSubtitle.Text = "Sistema Independiente de Control, Estatus y Mantenimiento (v" + Program.CURRENT_VERSION + ")";
+            lblSubtitle.Text = "👿 Parche v1.6.1 (Azazel) Aplicado - Telemetría & Purga Masiva Activa";
             lblSubtitle.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
             lblSubtitle.ForeColor = Color.FromArgb(148, 163, 184);
             lblSubtitle.AutoSize = true;
             lblSubtitle.Location = new Point(85, 42);
             header.Controls.Add(lblSubtitle);
+
+            Label lblAzazelBadge = new Label();
+            lblAzazelBadge.Text = "👿 AZAZEL v1.6.1";
+            lblAzazelBadge.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            lblAzazelBadge.BackColor = Color.FromArgb(225, 29, 72);
+            lblAzazelBadge.ForeColor = Color.White;
+            lblAzazelBadge.AutoSize = true;
+            lblAzazelBadge.Padding = new Padding(6, 4, 6, 4);
+            lblAzazelBadge.Location = new Point(480, 20);
+            header.Controls.Add(lblAzazelBadge);
 
             lblStatus = new Label();
             lblStatus.Text = "[..] Conectando con GitHub...";

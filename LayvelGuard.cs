@@ -1474,6 +1474,7 @@ namespace LayvelGuard
                 // Juegos, Launchers & Emuladores
                 "roblox", "steam", "minecraft", "epic games", "valorant", "league of legends", "origin", "ea app",
                 "bluestacks", "ldplayer", "nox", "memu", "cheat engine", "stumble guys", "tlauncher", "lunar client", "feather client", "osu",
+                "arena breakout", "google play games", "hotline miami", "hydra",
                 // Torrents, P2P & Reproductores No Autorizados
                 "utorrent", "bittorrent", "qbittorrent", "ares", "popcorn time", "stremio",
                 // Navegadores No Autorizados (Solo Edge y Chrome permitidos)
@@ -1481,7 +1482,7 @@ namespace LayvelGuard
                 // Editores y Suites Ofimáticas No Autorizadas (Solo MS Office y Nitro PDF permitidos)
                 "libreoffice", "openoffice", "wps office", "wps", "onlyoffice", "freeoffice", "polaris office", "abiword", "foxit",
                 // Antivirus & Limpiadores No Autorizados (Solo Windows Defender permitido)
-                "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner",
+                "avast", "avg", "avira", "kaspersky", "mcafee", "norton", "bitdefender", "panda", "eset", "sophos", "malwarebytes", "360 total security", "ccleaner", "mem reduct", "ht parental",
                 // Mensajería, Control Remoto y Apps de Fondo No Autorizadas
                 "discord", "telegram", "whatsapp", "anydesk", "teamviewer", "parsec", "lively", "wallpaper engine", "rainmeter", "deskscapes", "bing wallpaper", "plastuer", "autodarkmode", "translucenttb", "chameleon"
             };
@@ -1691,6 +1692,7 @@ namespace LayvelGuard
             List<string> procs = new List<string>() {
                 "RobloxPlayerBeta", "RobloxStudioBeta", "RobloxPlayerLauncher",
                 "Steam", "SteamService", "steamwebhelper", "MinecraftLauncher", "EpicGamesLauncher",
+                "ArenaBreakout", "GooglePlayGames", "GooglePlayGamesService", "HotlineMiami", "Hydra", "MemReduct", "HTParental",
                 "uTorrent", "BitTorrent", "qBittorrent", "Ares", "PopcornTime", "Stremio",
                 "firefox", "opera", "operagx", "brave", "vivaldi", "tor", "yandex", "ucbrowser",
                 "soffice.bin", "soffice", "wps", "wpscloud", "wpscenter", "onlyoffice", "abiword", "foxitreader",

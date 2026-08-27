@@ -25,7 +25,7 @@ foreach ($computers as $c) {
 }
 
 // Lista de palabras clave de juegos no autorizados para alertas rojas
-$unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic games', 'counter-strike', 'valorant', 'gta', 'league of legends', 'fortnite', 'torrent'];
+$unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic games', 'counter-strike', 'valorant', 'gta', 'league of legends', 'fortnite', 'torrent', 'arena breakout', 'google play games', 'hotline miami', 'hydra', 'mem reduct', 'ht parental'];
 
 // Consolidación de software único de todos los equipos
 $allUniqueSoftware = [];

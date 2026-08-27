@@ -294,11 +294,13 @@ namespace LayvelGuard
                                 string script = string.Format(
                                     "@echo off\r\n" +
                                     "timeout /t 1 /nobreak > nul\r\n" +
+                                    "taskkill /f /im LayvelGuard.exe > nul 2>&1\r\n" +
+                                    "timeout /t 1 /nobreak > nul\r\n" +
                                     "copy /y \"{0}\" \"{1}\"\r\n" +
                                     "copy /y \"{0}\" \"{2}\"\r\n" +
-                                    "del \"{0}\"\r\n" +
+                                    "del /f /q \"{0}\"\r\n" +
                                     "start \"\" \"{1}\"\r\n" +
-                                    "del \"%~f0\"\r\n",
+                                    "(goto) 2>nul & del \"%~f0\"\r\n",
                                     tempFile, targetExe, exePath
                                 );
                                 File.WriteAllText(batchUpdater, script, Encoding.ASCII);
@@ -307,6 +309,8 @@ namespace LayvelGuard
                                 psi.CreateNoWindow = true;
                                 psi.UseShellExecute = false;
                                 Process.Start(psi);
+
+                                Environment.Exit(0);
                                 return true;
                             }
                         }

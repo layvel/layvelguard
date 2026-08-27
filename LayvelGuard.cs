@@ -2940,8 +2940,25 @@ namespace LayvelGuard
             lblAzazelBadge.ForeColor = Color.White;
             lblAzazelBadge.AutoSize = true;
             lblAzazelBadge.Padding = new Padding(6, 4, 6, 4);
-            lblAzazelBadge.Location = new Point(480, 20);
+            lblAzazelBadge.Location = new Point(480, 25);
             header.Controls.Add(lblAzazelBadge);
+
+            PictureBox picAzazel = new PictureBox();
+            picAzazel.Size = new Size(54, 54);
+            picAzazel.Location = new Point(415, 12);
+            picAzazel.SizeMode = PictureBoxSizeMode.Zoom;
+            picAzazel.BackColor = Color.Transparent;
+            string azazelPath = @"C:\LayvelGuard\azazel_icon.png";
+            if (!File.Exists(azazelPath))
+            {
+                if (File.Exists("azazel_icon.png")) { try { File.Copy("azazel_icon.png", azazelPath, true); } catch {} }
+                else { Program.DownloadSingleAssetFromGitHub("azazel_icon.png", azazelPath, Program.GetLatestCommitSha()); }
+            }
+            if (File.Exists(azazelPath))
+            {
+                try { picAzazel.Image = Image.FromFile(azazelPath); } catch {}
+            }
+            header.Controls.Add(picAzazel);
 
             lblStatus = new Label();
             lblStatus.Text = "[..] Conectando con GitHub...";

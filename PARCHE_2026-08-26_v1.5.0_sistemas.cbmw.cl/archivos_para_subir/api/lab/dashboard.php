@@ -175,7 +175,7 @@ $reportText = implode("\n", $reportLines);
     <div class="container">
         <div class="header">
             <div class="title">
-                <h1>🖥️ Monitoreo e Inventario CBMW (v1.6.1 - Azazel Patch 👿)</h1>
+                <h1><img src="azazel_icon.png" style="width:42px; height:42px; vertical-align:middle; margin-right:8px; border-radius:6px;"> 🖥️ Monitoreo e Inventario CBMW (v1.6.1 - Azazel Patch 👿)</h1>
                 <p>Auditoría Profunda, Telemetría e Inventario: sistemas.cbmw.cl</p>
             </div>
             <div style="display:flex; align-items:center; gap:16px;">

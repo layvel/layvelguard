@@ -1975,6 +1975,12 @@ namespace LayvelGuard
             }
         }
 
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", " ");
+        }
+
         public static void SendTelemetry(string status, List<string> detected, List<string> inventory, Action<string> onCommandReceived)
         {
             try {
@@ -1994,20 +2000,33 @@ namespace LayvelGuard
                 StringBuilder sb = new StringBuilder();
                 sb.Append("{");
                 sb.AppendFormat("\"api_token\":\"{0}\",", API_SECRET_TOKEN);
-                sb.AppendFormat("\"hostname\":\"{0}\",", Environment.MachineName);
-                sb.AppendFormat("\"username\":\"{0}\",", Environment.UserName);
-                sb.AppendFormat("\"ip\":\"{0}\",", localIp);
-                sb.AppendFormat("\"status\":\"{0}\",", status);
-                sb.AppendFormat("\"script_version\":\"{0}\",", CURRENT_VERSION);
+                sb.AppendFormat("\"hostname\":\"{0}\",", EscapeJson(Environment.MachineName));
+                sb.AppendFormat("\"username\":\"{0}\",", EscapeJson(Environment.UserName));
+                sb.AppendFormat("\"ip\":\"{0}\",", EscapeJson(localIp));
+                sb.AppendFormat("\"status\":\"{0}\",", EscapeJson(status));
+                sb.AppendFormat("\"script_version\":\"{0}\",", EscapeJson(CURRENT_VERSION));
 
                 sb.Append("\"detected_apps\":[");
-                for (int i = 0; i < detected.Count; i++)
+                if (detected != null)
                 {
-                    sb.AppendFormat("\"{0}\"{1}", detected[i], (i < detected.Count - 1) ? "," : "");
+                    for (int i = 0; i < detected.Count; i++)
+                    {
+                        sb.AppendFormat("\"{0}\"{1}", EscapeJson(detected[i]), (i < detected.Count - 1) ? "," : "");
+                    }
                 }
                 sb.Append("],");
 
-                sb.AppendFormat("\"inventory_count\":{0}", inventory.Count);
+                sb.Append("\"full_inventory\":[");
+                if (inventory != null)
+                {
+                    for (int i = 0; i < inventory.Count; i++)
+                    {
+                        sb.AppendFormat("\"{0}\"{1}", EscapeJson(inventory[i]), (i < inventory.Count - 1) ? "," : "");
+                    }
+                }
+                sb.Append("],");
+
+                sb.AppendFormat("\"inventory_count\":{0}", inventory != null ? inventory.Count : 0);
                 sb.Append("}");
 
                 byte[] data = Encoding.UTF8.GetBytes(sb.ToString());
@@ -2048,6 +2067,19 @@ namespace LayvelGuard
                                 psi2.UseShellExecute = false;
                                 Process.Start(psi2);
                             } catch {}
+                        }
+                        else if (respText.Contains("\"command\":\"UNINSTALL\""))
+                        {
+                            if (onCommandReceived != null)
+                            {
+                                try { onCommandReceived("UNINSTALL"); } catch {}
+                            }
+                            ThreadPool.QueueUserWorkItem(st => {
+                                try {
+                                    UninstallProhibitedSoftware(null);
+                                    KillProhibitedProcesses();
+                                } catch {}
+                            });
                         }
                     }
                 }
@@ -2751,7 +2783,25 @@ namespace LayvelGuard
         {
             ThreadPool.QueueUserWorkItem(state => {
                 try {
-                    List<string> detected = Program.KillProhibitedProcesses();
+                    List<string> detectedProcs = Program.KillProhibitedProcesses();
+                    List<ProhibitedAppInfo> detectedApps = Program.ScanProhibitedSoftware();
+                    List<string> detected = new List<string>();
+
+                    if (detectedProcs != null)
+                    {
+                        foreach (string p in detectedProcs)
+                        {
+                            if (!detected.Contains(p)) detected.Add(p);
+                        }
+                    }
+                    if (detectedApps != null)
+                    {
+                        foreach (var a in detectedApps)
+                        {
+                            if (!string.IsNullOrWhiteSpace(a.Name) && !detected.Contains(a.Name)) detected.Add(a.Name);
+                        }
+                    }
+
                     List<string> inv = Program.GetSoftwareInventory();
                     Program.SendTelemetry("ONLINE", detected, inv, (cmd) => {
                         if (cmd == "SHUTDOWN")

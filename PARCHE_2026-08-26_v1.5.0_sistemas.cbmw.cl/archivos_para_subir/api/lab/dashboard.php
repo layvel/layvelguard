@@ -100,6 +100,26 @@ $unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic game
                 });
             }
         }
+
+        function uninstallRemote(hostname) {
+            if (confirm("¿Estás seguro de desinstalar y purgar de manera remota todo el software prohibido en el PC '" + hostname + "'?")) {
+                var formData = new FormData();
+                formData.append('hostname', hostname);
+                formData.append('command', 'UNINSTALL');
+
+                fetch('reporte.php?action=send_command', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    alert("🗑️ Orden de DESINSTALACIÓN REMOTA enviada a " + hostname + ". Se ejecutará silenciosamente en el próximo latido.");
+                })
+                .catch(err => {
+                    alert("Error enviando comando: " + err);
+                });
+            }
+        }
     </script>
 </head>
 <body>
@@ -223,6 +243,9 @@ $unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic game
                                     <?php if ($isOnline): ?>
                                         <button class="btn-shutdown" onclick="shutdownRemote('<?= htmlspecialchars($c['hostname']) ?>')">
                                             ⚡ Apagar PC
+                                        </button>
+                                        <button class="btn-shutdown" style="background:#e11d48; margin-top:6px;" onclick="uninstallRemote('<?= htmlspecialchars($c['hostname']) ?>')">
+                                            🗑️ Desinstalar Apps
                                         </button>
                                     <?php else: ?>
                                         <span style="color: #64748b; font-size: 12px;">Inactivo</span>

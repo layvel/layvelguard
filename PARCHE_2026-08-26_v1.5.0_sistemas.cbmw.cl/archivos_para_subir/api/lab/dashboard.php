@@ -26,6 +26,32 @@ foreach ($computers as $c) {
 
 // Lista de palabras clave de juegos no autorizados para alertas rojas
 $unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic games', 'counter-strike', 'valorant', 'gta', 'league of legends', 'fortnite', 'torrent'];
+
+// Consolidación de software único de todos los equipos
+$allUniqueSoftware = [];
+foreach ($computers as $c) {
+    $inv = $c['full_inventory'] ?? [];
+    foreach ($inv as $app) {
+        $cleanApp = trim($app);
+        if (!empty($cleanApp) && !in_array($cleanApp, $allUniqueSoftware)) {
+            $allUniqueSoftware[] = $cleanApp;
+        }
+    }
+}
+sort($allUniqueSoftware, SORT_NATURAL | SORT_FLAG_CASE);
+
+$reportLines = [];
+$reportLines[] = "==================================================";
+$reportLines[] = "REPORTE DE INVENTARIO CONSOLIDADO - CBMW LABS";
+$reportLines[] = "Total Equipos Registrados: " . $totalComputers;
+$reportLines[] = "Total Aplicaciones Únicas Detectadas: " . count($allUniqueSoftware);
+$reportLines[] = "Fecha de Generación: " . date('Y-m-d H:i:s');
+$reportLines[] = "==================================================";
+$reportLines[] = "";
+foreach ($allUniqueSoftware as $app) {
+    $reportLines[] = "- " . $app;
+}
+$reportText = implode("\n", $reportLines);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -120,6 +146,29 @@ $unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic game
                 });
             }
         }
+
+        function openReportModal() {
+            document.getElementById('reportModal').style.display = 'flex';
+        }
+        function closeReportModal() {
+            document.getElementById('reportModal').style.display = 'none';
+        }
+        function copyReportText() {
+            var copyText = document.getElementById("reportTextArea");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(copyText.value).then(function() {
+                    alert("¡Reporte copiado al portapapeles exitosamente! Ahora puedes pegarlo en el chat.");
+                }).catch(function() {
+                    document.execCommand('copy');
+                    alert("¡Reporte copiado!");
+                });
+            } else {
+                document.execCommand('copy');
+                alert("¡Reporte copiado!");
+            }
+        }
     </script>
 </head>
 <body>
@@ -129,7 +178,10 @@ $unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic game
                 <h1>🖥️ Monitoreo e Inventario de Software CBMW</h1>
                 <p>Auditoría Profunda y Apagado Remoto: sistemas.cbmw.cl</p>
             </div>
-            <div>
+            <div style="display:flex; align-items:center; gap:16px;">
+                <button onclick="openReportModal()" style="background:#2563eb; color:#ffffff; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; display:inline-flex; align-items:center; gap:8px; box-shadow:0 4px 6px -1px rgba(37,99,235,0.3);">
+                    📋 Copiar Reporte para la IA
+                </button>
                 <span style="font-size: 12px; color: #94a3b8;">Auto-refresco cada 15s</span>
             </div>
         </div>
@@ -256,6 +308,21 @@ $unwantedKeywords = ['roblox', 'steam', 'minecraft', 'resident evil', 'epic game
                     <?php endif; ?>
                 </tbody>
             </table>
+        </div>
+    </div>
+    <!-- Modal de Reporte Consolidado -->
+    <div id="reportModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:#1e293b; width:100%; max-width:700px; padding:24px; border-radius:12px; border:1px solid #334155; box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h2 style="font-size:18px; font-weight:700; color:#f8fafc;">📋 Reporte Consolidado de Software (<?= count($allUniqueSoftware) ?> Apps)</h2>
+                <button onclick="closeReportModal()" style="background:transparent; border:none; color:#94a3b8; font-size:22px; cursor:pointer;">✕</button>
+            </div>
+            <p style="font-size:13px; color:#94a3b8; margin-bottom:12px;">Haz clic en el botón verde para copiar todo el reporte y pegárselo al asistente IA:</p>
+            <textarea id="reportTextArea" readonly style="width:100%; height:320px; background:#090d16; color:#38bdf8; font-family:monospace; font-size:12px; padding:12px; border-radius:8px; border:1px solid #334155; resize:none; outline:none;"><?= htmlspecialchars($reportText) ?></textarea>
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:16px;">
+                <button onclick="closeReportModal()" style="background:#334155; color:#fff; border:none; padding:10px 18px; border-radius:6px; font-weight:600; cursor:pointer;">Cerrar</button>
+                <button onclick="copyReportText()" style="background:#10b981; color:#fff; border:none; padding:10px 18px; border-radius:6px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">📋 Copiar al Portapapeles</button>
+            </div>
         </div>
     </div>
 </body>
